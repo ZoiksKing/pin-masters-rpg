@@ -76,12 +76,16 @@ button,.btn,select{min-height:44px}
 #app{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right)}
 .toast{top:calc(10px + env(safe-area-inset-top))}
 .modal .card{max-height:calc(100vh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom));max-height:calc(100dvh - 32px - env(safe-area-inset-top) - env(safe-area-inset-bottom))}
+.sndbtn{width:44px;height:44px;min-height:44px;flex:none;border:0;border-radius:50%;background:#ede9fe;font-size:20px;cursor:pointer;padding:0;box-shadow:0 2px 0 #c4b5fd}
+.sndbtn:active{transform:translateY(2px);box-shadow:none}
+.toggle{min-width:64px}
+.vol{margin-top:8px}.vol input[type=range]{accent-color:#7c3aed;height:32px;min-width:0}
 </style></head>
 <body><div id="app">
 <section class="screen" id="create"></section><section class="screen" id="hub"></section><section class="screen" id="story"></section>
 <section class="screen" id="pvp"></section><section class="screen" id="training"></section><section class="screen" id="alleys"></section>
 <section class="screen" id="shop"></section><section class="screen" id="gear"></section>
-<section class="screen" id="stats"></section><section class="screen" id="leaderboard"></section><section class="screen" id="skills"></section><section class="screen" id="daily"></section><section class="screen" id="club"></section><section class="screen" id="style"></section><section class="screen" id="guide"></section><section class="screen" id="match"></section>
+<section class="screen" id="stats"></section><section class="screen" id="leaderboard"></section><section class="screen" id="skills"></section><section class="screen" id="daily"></section><section class="screen" id="club"></section><section class="screen" id="style"></section><section class="screen" id="guide"></section><section class="screen" id="settings"></section><section class="screen" id="match"></section>
 </div>
 <div class="modal" id="modal"><div class="card"><div id="modalBody"></div><div id="modalBtns"></div></div></div><div class="toast" id="toast"></div>
 <script>/* Pin Masters RPG - game data (data-driven so content can be swapped/licensed later).
@@ -830,6 +834,243 @@ button,.btn,select{min-height:44px}
     shouldShowInterstitial, markInterstitialShown, bannerVisible, canWatchRewarded, grantRewarded, purchaseRemoveAds, restorePurchases,
     generateRivals, leaderboard, tierOf, save, load, data: D };
 });
+</script><script>/* Pin Masters RPG audio: 100% original, procedurally synthesized Web Audio sound effects and music.
+   No external or copyrighted files. Optional overrides: drop MP3/WAV/OGG files in assets/audio/ and list them in
+   assets/audio/manifest.json ({"sfx":{"strike":"my_strike.mp3"},"music":{"menu":"my_theme.mp3"}}). */
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  else root.PMAudio = Object.assign(api, api.createEngine(root));
+})(typeof self !== 'undefined' ? self : this, function () {
+  'use strict';
+  const SETTINGS_KEY = 'pinMasters.audio.v1';
+  const DEFAULTS = Object.freeze({ sfx: true, music: true, sfxVol: 0.8, musicVol: 0.5 });
+  const SOUNDS = ['click', 'release', 'pins', 'strikeCrash', 'gutter', 'gutterEnd', 'strike', 'spare', 'split', 'sweep', 'levelup', 'coin', 'denied', 'win', 'loss', 'brock', 'champion'];
+  const TRACK_NAMES = ['menu', 'match', 'tense'];
+  const vol01 = (v, d) => (typeof v === 'number' && isFinite(v) ? Math.max(0, Math.min(1, v)) : d);
+  function normalizeSettings(s) {
+    s = s && typeof s === 'object' ? s : {};
+    return { sfx: typeof s.sfx === 'boolean' ? s.sfx : DEFAULTS.sfx, music: typeof s.music === 'boolean' ? s.music : DEFAULTS.music, sfxVol: vol01(s.sfxVol, DEFAULTS.sfxVol), musicVol: vol01(s.musicVol, DEFAULTS.musicVol) };
+  }
+  function loadSettings(storage) { try { return normalizeSettings(JSON.parse((storage && storage.getItem(SETTINGS_KEY)) || 'null')); } catch (e) { return normalizeSettings(null); } }
+  function saveSettings(s, storage) { const n = normalizeSettings(s); try { storage && storage.setItem(SETTINGS_KEY, JSON.stringify(n)); } catch (e) {} return n; }
+
+  // ------------------------------------------------------------------ engine (browser / mock window)
+  function createEngine(win) {
+    const doc = win && win.document; const noop = () => {};
+    let store = null; try { store = win && win.localStorage; } catch (e) {}
+    let S = loadSettings(store);
+    const AC = win && (win.AudioContext || win.webkitAudioContext);
+    const MUSIC_LEVEL = 0.38;               // music sits well under the sound effects
+    let ctx = null, master, sfxBus, musicBus, duckGain, noiseBuf, unlocked = false, ducked = false;
+    const OV = { sfx: {}, music: {} };     // decoded override buffers
+    const mf = m => 440 * Math.pow(2, (m - 69) / 12);
+    const R = Math.random;
+
+    function ensure() {
+      if (ctx || !AC) return ctx;
+      try { ctx = new AC({ latencyHint: 'interactive' }); } catch (e) { try { ctx = new AC(); } catch (e2) { return null; } }
+      const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -12; comp.knee.value = 10; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
+      master = ctx.createGain(); master.gain.value = 0.9; master.connect(comp); comp.connect(ctx.destination);
+      sfxBus = ctx.createGain(); sfxBus.connect(master);
+      duckGain = ctx.createGain(); duckGain.connect(master);
+      musicBus = ctx.createGain(); musicBus.connect(duckGain);
+      const len = ctx.sampleRate * 2; noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate); const d = noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = R() * 2 - 1;
+      applyVolumes(true);
+      return ctx;
+    }
+    const setP = (p, v, instant, tc) => { if (instant) { p.cancelScheduledValues(0); p.value = v; } else { const t = ctx.currentTime; p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); p.setTargetAtTime(v, t, tc || 0.06); } };
+    const targets = () => ({ sfx: S.sfx ? S.sfxVol : 0, music: S.music ? S.musicVol * MUSIC_LEVEL : 0, duck: ducked ? 0 : 1 });
+    function applyVolumes(instant) { if (!ctx) return; const g = targets(); setP(sfxBus.gain, g.sfx, instant); setP(musicBus.gain, g.music, instant, 0.15); setP(duckGain.gain, g.duck, instant, 0.12); }
+    const ready = () => ctx && unlocked && ctx.state === 'running';
+
+    // ---------------- synthesis primitives
+    function tone(type, f, t, dur, vol, dest, o) {
+      o = o || {}; const os = ctx.createOscillator(), g = ctx.createGain(); os.type = type; os.frequency.setValueAtTime(f, t);
+      if (o.f2) os.frequency.exponentialRampToValueAtTime(o.f2, t + (o.glide || dur)); if (o.detune) os.detune.value = o.detune;
+      let n = os; if (o.lp) { const fl = ctx.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o.lp; fl.Q.value = o.q || 0.7; os.connect(fl); n = fl; }
+      if (o.vib) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = o.vib; lg.gain.value = o.vibDepth || 12; l.connect(lg); lg.connect(os.detune); l.start(t); l.stop(t + dur + 0.05); }
+      n.connect(g); g.connect(dest || sfxBus); const a = o.a || 0.004;
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + a);
+      if (o.hold) g.gain.setValueAtTime(vol, t + a + o.hold);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      os.start(t); os.stop(t + dur + 0.05); os.onended = () => { try { g.disconnect(); } catch (e) {} };
+    }
+    function noise(t, dur, vol, dest, o) {
+      o = o || {}; const s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = noiseBuf; s.loop = true;
+      fl.type = o.type || 'bandpass'; fl.frequency.setValueAtTime(o.f || 1000, t); if (o.f2) fl.frequency.exponentialRampToValueAtTime(o.f2, t + dur); fl.Q.value = o.q || 1;
+      s.connect(fl); fl.connect(g); g.connect(dest || sfxBus); const a = o.a || 0.002;
+      g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      s.start(t, R() * 1.5); s.stop(t + dur + 0.05); s.onended = () => { try { g.disconnect(); } catch (e) {} };
+    }
+    const bell = (m, t, dur, vol, dest) => { const f = mf(m); tone('sine', f, t, dur, vol, dest); tone('sine', f * 2.76, t, dur * 0.5, vol * 0.3, dest); tone('sine', f * 5.4, t, dur * 0.25, vol * 0.12, dest); };
+    const brass = (m, t, dur, vol, dest) => { const f = mf(m); tone('sawtooth', f, t, dur, vol, dest, { lp: 2400, a: 0.02, hold: dur * 0.5, detune: -6 }); tone('sawtooth', f, t, dur, vol * 0.7, dest, { lp: 1800, a: 0.03, hold: dur * 0.5, detune: 7 }); };
+    function crowd(t, dur, vol) {           // original synthesized cheer: formant-filtered noise bands + claps
+      [520, 900, 1400, 2100, 3000].forEach((f, k) => {
+        const s = ctx.createBufferSource(), fl = ctx.createBiquadFilter(), g = ctx.createGain(), l = ctx.createOscillator(), lg = ctx.createGain();
+        s.buffer = noiseBuf; s.loop = true; fl.type = 'bandpass'; fl.frequency.value = f; fl.Q.value = 1.4; l.frequency.value = 5 + k * 1.7 + R() * 2; lg.gain.value = vol * 0.25;
+        s.connect(fl); fl.connect(g); g.connect(sfxBus); l.connect(lg); lg.connect(g.gain);
+        g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(vol * (1 - k * 0.12), t + 0.18); g.gain.setTargetAtTime(0.0001, t + dur * 0.45, dur * 0.22);
+        s.start(t, R()); l.start(t); s.stop(t + dur + 0.1); l.stop(t + dur + 0.1); s.onended = () => { try { g.disconnect(); } catch (e) {} };
+      });
+      const claps = Math.round(dur * 22); for (let i = 0; i < claps; i++) noise(t + R() * dur * 0.85, 0.04, vol * (0.6 + R() * 0.6), null, { type: 'bandpass', f: 1500 + R() * 1500, q: 1.5 });
+    }
+    const kick = (t, v, d) => tone('sine', 150, t, 0.32, v, d, { f2: 42, glide: 0.12 });
+    const snare = (t, v, d) => { noise(t, 0.16, v, d, { type: 'highpass', f: 1400 }); tone('triangle', 210, t, 0.09, v * 0.6, d, { f2: 150 }); };
+    const hat = (t, v, d, open) => noise(t, open ? 0.14 : 0.035, v, d, { type: 'highpass', f: 7500 });
+    const tom = (t, m, v, d) => tone('sine', mf(m), t, 0.3, v, d, { f2: mf(m) * 0.7, glide: 0.25 });
+    const ep = (m, t, dur, v, d) => { tone('sine', mf(m), t, dur, v, d, { a: 0.006 }); tone('triangle', mf(m) * 2, t, dur * 0.35, v * 0.22, d); };
+    const pad = (m, t, dur, v, d) => { tone('sawtooth', mf(m), t, dur, v, d, { lp: 1000, a: dur * 0.25, hold: dur * 0.4, detune: -8 }); tone('sawtooth', mf(m), t, dur, v, d, { lp: 900, a: dur * 0.25, hold: dur * 0.4, detune: 8 }); };
+    const bass = (m, t, dur, v, d) => { tone('triangle', mf(m), t, dur, v, d, { lp: 700, hold: dur * 0.5 }); tone('sine', mf(m), t, dur, v * 0.7, d, { hold: dur * 0.5 }); };
+    const pluck = (m, t, dur, v, d) => tone('square', mf(m), t, dur, v, d, { lp: 2600, q: 1.5 });
+
+    // ---------------- sound effects
+    const SFX = {
+      click: t => { tone('triangle', 1150, t, 0.06, 0.16, null, { f2: 720 }); noise(t, 0.02, 0.05, null, { type: 'highpass', f: 4500 }); },
+      release: t => { tone('sine', 150, t, 0.28, 0.6, null, { f2: 48 }); noise(t, 0.13, 0.28, null, { type: 'lowpass', f: 520 }); },
+      pins: (t, o) => {
+        const n = Math.max(0, Math.min(10, (o && o.count) | 0)), big = n >= 7 || (o && o.strike);
+        tone('sine', 190, t, 0.22, 0.45 + n * 0.035, null, { f2: 60 }); noise(t, 0.16, 0.3 + n * 0.03, null, { type: 'lowpass', f: 1300 });
+        const hits = Math.round(n * 1.9 + (o && o.strike ? 6 : 0)), spread = 0.22 + n * 0.045;
+        for (let i = 0; i < hits; i++) { const tt = t + 0.008 + Math.pow(R(), 1.5) * spread, f = 620 + R() * 950, v = 0.1 + R() * 0.14;
+          tone('sine', f, tt, 0.08 + R() * 0.07, v, null, { f2: f * 0.9 }); tone('triangle', f * 2.71, tt, 0.04, v * 0.35); noise(tt, 0.03, v * 0.9, null, { type: 'bandpass', f: 2300 + R() * 2200, q: 2 }); }
+        if (big) SFX.strikeCrash(t, o);
+        for (let i = 0; i < Math.min(n, 4); i++) noise(t + 0.38 + R() * 0.35, 0.09, 0.08, null, { type: 'lowpass', f: 380 });
+      },
+      strikeCrash: t => { noise(t + 0.02, 0.95, 0.32, null, { type: 'bandpass', f: 2000, f2: 520, q: 0.8 }); tone('sine', 72, t, 0.6, 0.35, null, { f2: 45 }); },
+      gutter: t => { noise(t, 0.35, 0.12, null, { type: 'bandpass', f: 900, q: 6 }); },
+      gutterEnd: t => { tone('sine', 95, t, 0.32, 0.42, null, { f2: 52 }); noise(t, 0.2, 0.18, null, { type: 'lowpass', f: 320 }); },
+      strike: t => { [67, 72, 76, 79].forEach((m, i) => brass(m, t + i * 0.085, i === 3 ? 0.7 : 0.16, 0.09)); [60, 64, 67].forEach(m => brass(m, t + 0.255, 0.7, 0.05)); crowd(t + 0.1, 1.9, 0.18); },
+      spare: t => { bell(88, t, 0.6, 0.18); bell(95, t + 0.12, 0.9, 0.16); crowd(t + 0.05, 1.1, 0.09); },
+      split: t => { tone('triangle', 466, t, 0.22, 0.2, null, { f2: 392 }); tone('triangle', 392, t + 0.22, 0.38, 0.2, null, { f2: 277, vib: 7, vibDepth: 25 }); },
+      sweep: t => { noise(t, 0.38, 0.07, null, { type: 'lowpass', f: 300, f2: 1000 }); tone('square', 55, t, 0.35, 0.025, null, { lp: 200 }); },
+      levelup: t => { [72, 76, 79, 84, 88].forEach((m, i) => pluck(m, t + i * 0.07, 0.18, 0.09)); bell(91, t + 0.36, 1.0, 0.16); noise(t + 0.36, 0.7, 0.05, null, { type: 'highpass', f: 6000, a: 0.1 }); },
+      coin: t => { bell(84, t, 0.18, 0.15); bell(91, t + 0.07, 0.5, 0.17); noise(t, 0.05, 0.04, null, { type: 'highpass', f: 6000 }); },
+      denied: t => { tone('square', 170, t, 0.11, 0.07, null, { lp: 900 }); tone('square', 150, t + 0.13, 0.16, 0.07, null, { lp: 900 }); },
+      win: t => { [[67, 0.13], [72, 0.13], [76, 0.13], [79, 0.32], [76, 0.13], [79, 0.8]].reduce((tt, [m, d]) => { brass(m, tt, d + 0.05, 0.1); return tt + d; }, t);
+        [48, 55, 60, 64].forEach(m => pad(m, t + 0.52, 1.4, 0.04)); kick(t + 0.52, 0.4); kick(t + 0.97, 0.4); crowd(t + 0.5, 2.2, 0.14); },
+      loss: t => { [[76, 0.22], [74, 0.22], [71, 0.22], [72, 0.75]].reduce((tt, [m, d], i) => { tone('triangle', mf(m), tt, d + 0.08, 0.17, null, i === 3 ? { vib: 5, vibDepth: 18, hold: 0.3 } : {}); return tt + d; }, t);
+        [57, 60, 64].forEach(m => pad(m, t, 0.66, 0.03)); [53, 57, 60].forEach(m => pad(m, t + 0.66, 0.9, 0.03)); },
+      brock: t => { for (let i = 0; i < 10; i++) tom(t + i * 0.055, 40, 0.08 + i * 0.03); [38, 45, 50, 53, 56].forEach(m => brass(m, t + 0.58, 0.85, 0.075)); kick(t + 0.58, 0.6); noise(t + 0.58, 0.9, 0.12, null, { type: 'bandpass', f: 3000, f2: 900 });
+        tone('triangle', 600, t + 1.05, 0.5, 0.1, null, { f2: 2400 }); [96, 100, 103].forEach((m, i) => bell(m, t + 1.3 + i * 0.07, 0.5, 0.07)); },
+      champion: t => { SFX.win(t); [84, 88, 91, 96].forEach((m, i) => bell(m, t + 1.6 + i * 0.12, 1.2, 0.1)); crowd(t + 1.4, 3, 0.16); }
+    };
+    function play(name, o) {
+      if (!ready() || !S.sfx) return false; const t = ctx.currentTime + 0.012 + ((o && o.delay) || 0);
+      if (OV.sfx[name]) { const s = ctx.createBufferSource(); s.buffer = OV.sfx[name]; s.connect(sfxBus); s.start(t); return true; }
+      const fn = SFX[name]; if (!fn) return false; try { fn(t, o); } catch (e) { err(name, e); } return true;
+    }
+    // ---------------- continuous ball roll (pitch/volume follow ball speed)
+    let roll = null;
+    function rollStart() {
+      rollStop(); if (!ready() || !S.sfx) return; const t = ctx.currentTime;
+      const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true; const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 380; bp.Q.value = 0.9;
+      const g = ctx.createGain(); g.gain.value = 0.0001; s.connect(bp); bp.connect(g); g.connect(sfxBus);
+      const rum = ctx.createOscillator(); rum.type = 'sine'; rum.frequency.value = 58; const rg = ctx.createGain(); rg.gain.value = 0.0001;
+      const lfo = ctx.createOscillator(); lfo.frequency.value = 8; const lg = ctx.createGain(); lg.gain.value = 0; lfo.connect(lg); lg.connect(rg.gain); rum.connect(rg); rg.connect(sfxBus);
+      s.start(t, R()); rum.start(t); lfo.start(t); roll = { s, bp, g, rum, rg, lfo, lg, gutter: false };
+    }
+    function rollUpdate(speed, prog, inGutter) {
+      if (!roll || !ctx) return; const t = ctx.currentTime, p = Math.max(0, Math.min(1, prog || 0));
+      const v = Math.max(0.3, Math.min(1.8, speed || 1)) * (1 - 0.3 * p), loud = Math.min(1, 0.55 + 0.45 * v) * (1 - 0.45 * p);   // slows + recedes down the lane
+      roll.bp.frequency.setTargetAtTime((inGutter ? 820 : 230 + 210 * v), t, 0.04); roll.bp.Q.setTargetAtTime(inGutter ? 7 : 0.9, t, 0.05);
+      roll.g.gain.setTargetAtTime((inGutter ? 0.32 : 0.24) * loud, t, 0.05);
+      roll.rum.frequency.setTargetAtTime(inGutter ? 120 : 42 + 26 * v, t, 0.05); roll.rg.gain.setTargetAtTime(0.22 * loud, t, 0.05); roll.lg.gain.setTargetAtTime(0.12 * loud, t, 0.05); roll.lfo.frequency.setTargetAtTime(4 + 8 * v, t, 0.05);
+      if (inGutter && !roll.gutter) { roll.gutter = true; play('gutter'); }
+    }
+    function rollStop() {
+      if (!roll) return; const r = roll; roll = null; if (!ctx) return; const t = ctx.currentTime;
+      [r.g.gain, r.rg.gain].forEach(p => { p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); p.setTargetAtTime(0.0001, t, 0.025); });
+      [r.s, r.rum, r.lfo].forEach(n => { try { n.stop(t + 0.2); } catch (e) {} }); r.s.onended = () => { try { r.g.disconnect(); r.rg.disconnect(); } catch (e) {} };
+    }
+
+    // ---------------- music: original step sequencer (16th-note steps), per-track gain for crossfades
+    const MENU_CH = [[48, [60, 64, 67, 71]], [45, [57, 60, 64, 67]], [41, [57, 60, 64, 65]], [43, [55, 59, 62, 64]]];
+    const MENU_MEL = [[[0, 76, 4], [4, 79, 2], [6, 81, 2], [8, 79, 6]], [[0, 76, 2], [2, 74, 2], [4, 72, 4], [8, 69, 6]], [[0, 72, 2], [2, 74, 2], [4, 76, 2], [6, 77, 2], [8, 81, 4], [12, 79, 4]], [[0, 74, 6], [8, 71, 2], [10, 74, 2], [12, 79, 4]],
+      [[0, 76, 4], [4, 79, 2], [6, 84, 2], [8, 81, 4], [12, 79, 4]], [[0, 81, 2], [2, 79, 2], [4, 76, 4], [8, 72, 4], [12, 74, 4]], [[0, 76, 2], [2, 77, 2], [4, 81, 4], [8, 79, 2], [10, 77, 2], [12, 76, 4]], [[0, 74, 8], [12, 71, 2], [14, 74, 2]]];
+    const MATCH_CH = [[41, [65, 69, 72]], [38, [62, 65, 69]], [34, [62, 65, 70]], [36, [64, 67, 72]]];
+    const MATCH_MEL = [[[0, 84, 2], [2, 81, 2], [4, 84, 2], [6, 86, 2], [8, 84, 4], [12, 81, 2], [14, 79, 2]], [[0, 77, 4], [4, 81, 2], [6, 79, 2], [8, 77, 2], [10, 74, 2], [12, 77, 4]], [[0, 86, 2], [2, 84, 2], [4, 82, 2], [6, 81, 2], [8, 82, 4], [12, 86, 4]], [[0, 84, 6], [6, 82, 2], [8, 81, 2], [10, 79, 2], [12, 76, 4]],
+      [[0, 84, 2], [2, 81, 2], [4, 84, 2], [6, 86, 2], [8, 84, 4], [12, 84, 2], [14, 86, 2]], [[0, 86, 4], [4, 84, 2], [6, 81, 2], [8, 77, 4], [12, 81, 4]], [[0, 82, 2], [2, 81, 2], [4, 79, 2], [6, 77, 2], [8, 79, 2], [10, 81, 2], [12, 82, 4]], [[0, 84, 4], [4, 76, 2], [6, 79, 2], [8, 84, 8]]];
+    const TENSE_CH = [[45, [57, 60, 64]], [41, [57, 60, 65]], [43, [55, 59, 62]], [40, [56, 59, 64]]];
+    const TENSE_MEL = [[[0, 69, 3], [3, 72, 3], [6, 76, 2], [8, 74, 4], [12, 72, 4]], [[0, 72, 3], [3, 69, 3], [6, 72, 2], [8, 69, 8]], [[0, 71, 3], [3, 74, 3], [6, 79, 2], [8, 77, 4], [12, 74, 4]], [[0, 76, 6], [6, 74, 2], [8, 71, 2], [10, 68, 2], [12, 76, 4]]];
+    const TRACKS = {
+      menu: { bpm: 84, step(i, t, d, sd) { const bar = (i >> 4), s = i & 15, [root, ch] = MENU_CH[bar & 3];
+        if (s === 0) bass(root, t, sd * 6, 0.32, d); if (s === 8) bass(root + 7, t, sd * 6, 0.26, d);
+        if (s === 0) ch.forEach(m => ep(m, t, sd * 9, 0.055, d)); if (s === 10) ch.forEach(m => ep(m, t, sd * 6, 0.035, d));
+        if (s % 2 === 0) noise(t, 0.05, s % 8 === 4 ? 0.035 : 0.018, d, { type: 'bandpass', f: 6500, q: 1.2 });
+        if (s === 0 || s === 7 || s === 10) tone('sine', 120, t, 0.25, 0.28, d, { f2: 45, glide: 0.1, lp: 300 }); if (s === 4 || s === 12) noise(t, 0.06, 0.05, d, { type: 'bandpass', f: 1800, q: 3 });
+        if ((bar & 15) < 8) MENU_MEL[bar & 7].forEach(([st, m, len]) => { if (st === s) tone('triangle', mf(m), t, sd * len * 0.95, 0.11, d, { a: 0.015, vib: 5, vibDepth: 6, hold: sd * len * 0.3 }); }); } },
+      match: { bpm: 120, step(i, t, d, sd) { const bar = (i >> 4), s = i & 15, [root, ch] = MATCH_CH[bar & 3];
+        if (s === 0 || s === 8 || (s === 10 && bar % 2)) kick(t, 0.5, d); if (s === 4 || s === 12) snare(t, 0.16, d); if (s % 2 === 0) hat(t, s === 14 ? 0.05 : 0.035, d, s === 14);
+        if (s % 2 === 0) bass(root + (s % 4 === 2 ? 12 : 0), t, sd * 1.6, 0.26, d);
+        if (s === 2 || s === 6 || s === 10 || s === 14) ch.forEach(m => pluck(m, t, sd * 1.2, 0.022, d));
+        if ((bar & 15) < 8) MATCH_MEL[bar & 7].forEach(([st, m, len]) => { if (st === s) pluck(m, t, sd * len * 0.9, 0.05, d); });
+        else if (s % 2 === 0) pluck(ch[(s >> 1) % 3] + 12, t, sd * 0.9, 0.025, d); } },
+      tense: { bpm: 104, step(i, t, d, sd) { const bar = (i >> 4), s = i & 15, [root, ch] = TENSE_CH[bar & 3];
+        bass(root, t, sd * 0.8, s % 4 === 0 ? 0.3 : 0.18, d); if (s === 0 || s === 8) kick(t, 0.5, d); if (s === 12) snare(t, 0.15, d); hat(t, s % 4 === 2 ? 0.03 : 0.015, d);
+        if (s === 3 || s === 6 || s === 14) tom(t, s === 14 ? 47 : 43, 0.18, d); if (s === 0) ch.forEach(m => pad(m, t, sd * 16, 0.028, d));
+        if ((bar & 7) >= 4) TENSE_MEL[bar & 3].forEach(([st, m, len]) => { if (st === s) tone('sawtooth', mf(m + 12), t, sd * len * 0.95, 0.045, d, { lp: 1800, a: 0.01, vib: 6, vibDepth: 8, hold: sd * len * 0.4 }); }); } }
+    };
+    let playing = [], current = null, wanted = null, timer = null, errs = 0;
+    const err = (where, e) => { if (errs++ < 3 && win.console) console.warn('audio', where, e && e.message); };
+    function startTrack(name) {
+      const g = ctx.createGain(); g.gain.value = 0.0001; g.connect(musicBus); const t = ctx.currentTime;
+      g.gain.setTargetAtTime(1, t, 0.45); const tr = { name, g, step: 0, next: t + 0.06, dieAt: 0 };
+      if (OV.music[name]) { const s = ctx.createBufferSource(); s.buffer = OV.music[name]; s.loop = true; s.connect(g); s.start(t + 0.05); tr.src = s; }
+      playing.push(tr); if (!timer) timer = setInterval(tick, 25); tick();
+    }
+    function fadeOut(tr) { const t = ctx.currentTime; tr.g.gain.cancelScheduledValues(t); tr.g.gain.setValueAtTime(tr.g.gain.value, t); tr.g.gain.setTargetAtTime(0.0001, t, 0.35); tr.dieAt = t + 1.8; }
+    function tick() {
+      if (!ctx || ctx.state !== 'running') return; const now = ctx.currentTime;
+      playing = playing.filter(tr => {
+        if (tr.dieAt && now > tr.dieAt) { try { tr.src && tr.src.stop(); tr.g.disconnect(); } catch (e) {} return false; }
+        if (tr.src) return true; const def = TRACKS[tr.name], sd = 60 / def.bpm / 4;
+        if (tr.next < now - 0.25) tr.next = now + 0.05;      // timers were throttled: skip ahead, don't burst
+        while (tr.next < now + 0.14) { if (S.music && !ducked && (!tr.dieAt || tr.next < tr.dieAt)) { try { def.step(tr.step, tr.next, tr.g, sd); } catch (e) { err(tr.name, e); } } tr.step++; tr.next += sd; }
+        return true;
+      });
+      if (!playing.length && timer) { clearInterval(timer); timer = null; }
+    }
+    function music(name) {
+      wanted = name && (TRACKS[name] || OV.music[name]) ? name : null;
+      if (!ctx || !unlocked) return; if (current === wanted) return;
+      playing.forEach(tr => { if (!tr.dieAt) fadeOut(tr); }); current = wanted; if (wanted) startTrack(wanted);
+    }
+    let musicReturn = null;
+    function stinger(name, thenTrack, ms) { clearTimeout(musicReturn); music(null); play(name); if (thenTrack) musicReturn = setTimeout(() => { if (!wanted) music(thenTrack); }, ms || 3200); }
+    function duck(on) { ducked = !!on; applyVolumes(false); }
+
+    // ---------------- optional file overrides (assets/audio/manifest.json)
+    let ovLoaded = false; const BASE = 'assets/audio/';
+    function loadOverrides() {
+      if (ovLoaded || !win.fetch || !win.location || !/^https?:$/.test(win.location.protocol)) return; ovLoaded = true;
+      win.fetch(BASE + 'manifest.json', { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).then(m => {
+        if (!m) return; ['sfx', 'music'].forEach(kind => Object.entries(m[kind] || {}).forEach(([name, file]) => { if (typeof file === 'string' && file) register(kind, name, BASE + file); }));
+      }).catch(noop);
+    }
+    function register(kind, name, url) {
+      if (!ctx || !OV[kind]) return Promise.resolve(false);
+      return win.fetch(url).then(r => { if (!r.ok) throw new Error(url); return r.arrayBuffer(); }).then(ab => new Promise((res, rej) => ctx.decodeAudioData(ab, res, rej)))
+        .then(buf => { OV[kind][name] = buf; if (kind === 'music' && name === current) { current = null; music(name); } return true; }).catch(e => { if (win.console) console.warn('audio override failed', url); return false; });
+    }
+
+    // ---------------- unlock (iOS/Android autoplay rules), visibility, settings
+    function unlock() {
+      if (!ensure()) return; if (doc && doc.hidden) return;
+      if (ctx.state !== 'running') { const p = ctx.resume(); p && p.catch && p.catch(noop); }
+      if (!unlocked) { unlocked = true; try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) {} loadOverrides(); const w = wanted; wanted = null; music(w); }
+    }
+    if (doc) {
+      ['pointerdown', 'touchend', 'mousedown', 'click', 'keydown'].forEach(e => doc.addEventListener(e, unlock, true));
+      doc.addEventListener('visibilitychange', () => { if (!ctx) return; if (doc.hidden) { rollStop(); const p = ctx.suspend(); p && p.catch && p.catch(noop); } else if (unlocked) { const p = ctx.resume(); p && p.catch && p.catch(noop); } });
+      win.addEventListener && win.addEventListener('pagehide', () => { if (ctx) { const p = ctx.suspend(); p && p.catch && p.catch(noop); } });
+    }
+    function set(patch) { S = saveSettings(Object.assign({}, S, patch), store); applyVolumes(false); if (patch && patch.music === true && current == null && wanted == null) {} return Object.assign({}, S); }
+    function state() { return { supported: !!AC, ctx: ctx ? ctx.state : 'none', unlocked, track: current, wanted, ducked, settings: Object.assign({}, S), targets: targets(), overrides: { sfx: Object.keys(OV.sfx), music: Object.keys(OV.music) }, playing: playing.length, errors: errs }; }
+    return { settings: () => Object.assign({}, S), set, unlock, play, music, stinger, duck, rollStart, rollUpdate, rollStop, register, state, _sfx: SFX, _tick: tick, _ctx: () => ctx };
+  }
+  return { SETTINGS_KEY, DEFAULTS, SOUNDS, TRACK_NAMES, normalizeSettings, loadSettings, saveSettings, createEngine };
+});
 </script><script>/* Pin Masters RPG lane renderer: 2D cartoon lane with light perspective, cached static art for phone performance. */
 (function (root) {
   'use strict';
@@ -985,17 +1226,20 @@ button,.btn,select{min-height:44px}
     this.pose = o => { const fn = path(o.ev || { knocked: o.knocked || [], fresh: true }, o); st.standing = o.standing.slice(); st.ball = o.ballD != null ? { d: o.ballD, u: fn(o.ballD), spin: 1 } : null; st.trail = o.ballD != null ? Array.from({ length: 20 }, (_, i) => ({ d: o.ballD * i / 19, u: fn(o.ballD * i / 19) })) : []; st.falling = o.knocked ? knockPose(o.knocked, st.ball ? st.ball.u : 0, o.k || 0) : []; st.text = o.text || null; st.callout = o.callout || null; draw(); };
     this.roll = async (ev, o) => {
       const sp = o.speed || 1; st.ballCol = o.ballCol || st.ballCol; st.standing = ev.standingBefore.slice(); st.falling = []; st.text = null; st.trail = []; st.parts = [];
-      st.callout = o.callout || null; const fn = path(ev, o);
-      await anim(1300 / sp, t => { const d = -2 + t * 63; st.ball = { d, u: fn(d), spin: t * 25 * (o.lefty ? -1 : 1) }; if (d > 0) st.trail.push({ d, u: st.ball.u }); if (st.trail.length > 40) st.trail.shift(); });
+      st.callout = o.callout || null; const fn = path(ev, o); const AU = root.PMAudio && root.PMAudio.play ? root.PMAudio : null;
+      if (AU) { AU.play('release'); AU.rollStart(); }
+      await anim(1300 / sp, t => { const d = -2 + t * 63; st.ball = { d, u: fn(d), spin: t * 25 * (o.lefty ? -1 : 1) }; if (d > 0) st.trail.push({ d, u: st.ball.u }); if (st.trail.length > 40) st.trail.shift(); if (AU) AU.rollUpdate(sp, t, Math.abs(st.ball.u) > 1.02 && d < 60); });
       const ballU = st.ball.u; st.standing = ev.standingBefore.filter(n => !ev.knocked.includes(n));
       const all = ev.knocked.length === ev.standingBefore.length;
+      if (AU) { AU.rollStop(); if (ev.knocked.length === 0) AU.play('gutterEnd'); else AU.play('pins', { count: ev.knocked.length, strike: all && ev.fresh }); }
       if (ev.knocked.length === 0) st.text = { msg: 'Miss!', col: '#e5e7eb', s: 0.6 };
-      else if (all && ev.fresh) { st.text = { msg: 'STRIKE!', col: '#facc15', s: 0.2 }; if (o.celebration) celebrate(o.celebration); }
-      else if (all) st.text = { msg: 'SPARE!', col: '#4ade80', s: 0.2 };
-      else if (ev.fresh && root.BRPG.isSplit(st.standing)) st.text = { msg: 'Split!', col: '#fb923c', s: 0.2 };
+      else if (all && ev.fresh) { st.text = { msg: 'STRIKE!', col: '#facc15', s: 0.2 }; if (o.celebration) celebrate(o.celebration); if (AU) AU.play('strike', { delay: 0.18 }); }
+      else if (all) { st.text = { msg: 'SPARE!', col: '#4ade80', s: 0.2 }; if (AU) AU.play('spare', { delay: 0.12 }); }
+      else if (ev.fresh && root.BRPG.isSplit(st.standing)) { st.text = { msg: 'Split!', col: '#fb923c', s: 0.2 }; if (AU) AU.play('split', { delay: 0.3 }); }
       await anim(750 / sp, k => { st.falling = knockPose(ev.knocked, ballU, k); if (st.ball) st.ball.d = Math.min(63.4, st.ball.d + 0.15); if (st.text) st.text.s = Math.min(1, st.text.s + 0.08); stepParts(); });
       st.ball = null; st.falling = [];
       await anim(500 / sp, t => { stepParts(); });
+      if (AU && sp < 4) AU.play('sweep');
       await anim(380 / sp, t => { st.sweep = t < 0.5 ? t * 2 : (1 - t) * 2; stepParts(); });
       st.sweep = null; st.text = null; st.callout = null; st.parts = []; draw();
     };
@@ -1013,11 +1257,13 @@ button,.btn,select{min-height:44px}
   const persist = () => P && C.save(P);
   const now = () => (window.__now ? new Date(window.__now) : new Date());
   const fast = () => !!window.__fast;
+  const NOAU = () => {}; const AU = window.PMAudio || { play: NOAU, music: NOAU, stinger: NOAU, duck: NOAU, set: () => ({}), settings: () => ({ sfx: true, music: true, sfxVol: 0.8, musicVol: 0.5 }), state: () => ({ supported: false }) };
+  const sfx = (n, o) => AU.play(n, o);
 
   // ---------- helpers ----------
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
   const RENDER = {};
-  function show(id) { current = id; if (RENDER[id]) RENDER[id](); document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id)); window.scrollTo(0, 0); }
+  function show(id) { current = id; if (id !== 'match') AU.music('menu'); if (RENDER[id]) RENDER[id](); document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id)); window.scrollTo(0, 0); }
   function modal(html, buttons) {
     const m = $('#modal'); $('#modalBody').innerHTML = html; const bb = $('#modalBtns'); bb.innerHTML = '';
     (buttons || [{ label: 'OK' }]).forEach(b => { const e = document.createElement('button'); e.className = 'btn ' + (b.cls || ''); e.textContent = b.label; e.style.marginTop = '8px'; if (b.id) e.id = b.id; if (b.disabled) e.disabled = true; e.onclick = () => { if (!b.keep) m.classList.remove('show'); b.fn && b.fn(); }; bb.appendChild(e); });
@@ -1026,7 +1272,7 @@ button,.btn,select{min-height:44px}
   const closeModal = () => $('#modal').classList.remove('show');
   function topbar() {
     const r = C.rating(C.baseStats(P));
-    return `<div class="topbar"><span style="font-size:22px">🎳</span><span class="nm">${esc(P.name)} <span class="tag">${C.tierOf(r)} · ${r}</span></span><span class="pill">🪙 ${P.coins}</span><span class="pill gem">💎 ${P.gems}</span></div>` +
+    return `<div class="topbar"><span style="font-size:22px">🎳</span><span class="nm">${esc(P.name)} <span class="tag">${C.tierOf(r)} · ${r}</span></span><span class="pill">🪙 ${P.coins}</span><span class="pill gem">💎 ${P.gems}</span><button class="sndbtn" title="Sound settings" aria-label="Sound settings">${AU.settings().sfx || AU.settings().music ? '🔊' : '🔇'}</button></div>` +
       (C.bannerVisible(P, current) ? `<div class="adbanner" id="adBanner">DEMO AD · placeholder banner (no real ads, no tracking) · Remove Ads in the Style Shop</div>` : '');
   }
   function statLine(bonus) { return Object.entries(bonus || {}).map(([k, v]) => `${D.STAT_INFO[k].icon}+${v}`).join(' '); }
@@ -1090,7 +1336,7 @@ button,.btn,select{min-height:44px}
     const B = (go, ic, label, cls, dot) => `<button class="btn big ${cls}" data-go="${go}"><span class="ic">${ic}</span>${label}${dot ? ' 🔴' : ''}</button>`;
     $('#hub').innerHTML = topbar() + `<div class="card row"><span id="hubAv"></span><div class="grow"><b>${done ? '🏆 PBA Champion!' : 'Chapter ' + ch.id + ': ' + ch.title}</b><div class="muted">${P.wins} wins · ${P.matches} matches · best ${P.best} · 🔥 ${P.daily.streak}-day streak</div></div></div>
     <div class="grid3">${B('story', '📖', 'Story', 'orange')}${B('pvp', '⚔️', 'PvP (sim)', 'blue')}${B('training', '🏋️', 'Practice', 'green')}${B('daily', '📅', 'Daily', 'pink', dailyReady)}${B('club', '🛡️', 'Club & League', '')}${B('skills', '💥', 'Special Shots', 'orange')}${B('shop', '🛍️', 'Pro Shops', 'pink')}${B('style', '👕', 'Style Shop', 'blue')}${B('gear', '🎒', 'My Gear', 'green')}${B('guide', '🛢️', 'Lane Guide', '')}${B('alleys', '🗺️', 'Alleys', 'orange')}${B('stats', '📊', 'Stats', 'green')}</div>
-    <button class="btn big" data-go="leaderboard" style="margin-top:8px"><span class="ic">🏅</span>Leaderboard</button>
+    <div class="grid" style="margin-top:8px"><button class="btn big" data-go="leaderboard"><span class="ic">🏅</span>Leaderboard</button><button class="btn big blue" data-go="settings"><span class="ic">⚙️</span>Settings</button></div>
     <p class="muted" style="text-align:center">Prototype build · saves to this device · <a href="#" id="resetLink">reset save</a></p>`;
     $('#hubAv').appendChild(avatar(playerLook(), 52));
     $('#hub').querySelectorAll('[data-go]').forEach(b => (b.onclick = () => show(b.dataset.go)));
@@ -1151,6 +1397,22 @@ button,.btn,select{min-height:44px}
     $('#leaderboard').innerHTML = html + '</table></div>';
   };
 
+  // ---------- Settings (sound) ----------
+  RENDER.settings = () => {
+    const st = AU.settings(), sup = AU.state().supported !== false;
+    const row = (id, ic, label, desc, on, vol) => `<div class="card"><div class="row"><span style="font-size:28px">${ic}</span><div class="grow"><b>${label}</b><div class="muted">${desc}</div></div><button class="btn small toggle ${on ? 'green' : 'gray'}" id="${id}Toggle" role="switch" aria-checked="${on}">${on ? 'ON' : 'OFF'}</button></div><label class="row vol"><span class="muted">Volume</span><input type="range" class="grow" id="${id}Vol" min="0" max="100" step="5" value="${Math.round(vol * 100)}" ${on ? '' : 'disabled'}><b id="${id}VolTxt" style="width:42px;text-align:right">${Math.round(vol * 100)}%</b></label></div>`;
+    $('#settings').innerHTML = topbar() + `<h2>⚙️ Settings</h2>${sup ? '' : '<div class="banner">This browser has no Web Audio support, so the game will be silent.</div>'}` +
+      row('sfx', '🔊', 'Sound Effects', 'Ball roll, pin crashes, cheers, buttons', st.sfx, st.sfxVol) + row('music', '🎵', 'Music', 'Menu, match and rival themes', st.music, st.musicVol) +
+      `<button class="btn" id="testSfx">▶ Test sound</button><div class="card muted" style="margin-top:10px">All sounds and music are original and made in code. Settings save on this device.<br>📱 iPhone: if you hear nothing, turn off Silent Mode (the switch on the side of the phone) and turn the volume up.</div>`;
+    const bind = k => {
+      $('#' + k + 'Toggle').onclick = () => { const on = !AU.settings()[k]; AU.set({ [k]: on }); if (on && k === 'sfx') setTimeout(() => sfx('coin'), 30); RENDER.settings(); };
+      const sl = $('#' + k + 'Vol'); sl.oninput = () => { $('#' + k + 'VolTxt').textContent = sl.value + '%'; AU.set({ [k + 'Vol']: sl.value / 100 }); };
+      sl.onchange = () => { if (k === 'sfx') sfx('pins', { count: 4 }); };
+    };
+    bind('sfx'); bind('music');
+    $('#testSfx').onclick = () => { sfx('release'); sfx('pins', { count: 10, strike: true, delay: 0.5 }); sfx('strike', { delay: 0.7 }); };
+  };
+
   // ---------- Shops & gear ----------
   let shopTab = 'corner';
   function itemCard(it, owned, isBall) {
@@ -1161,7 +1423,7 @@ button,.btn,select{min-height:44px}
     return `<div class="card row">${isBall ? swatch(it.id === P.equipped.ball ? ballColors(it) : br.colors) : `<div class="swatch" style="background:${br.colors[0]};display:flex;align-items:center;justify-content:center;font-size:16px">${{ shoes: '👟', glove: '🧤', wrist: '🦾', grip: '🩹', bag: '🎒', consumable: '🧴' }[it.slot]}</div>`}<div class="grow"><b>${esc(it.name)}</b> <span class="muted">· ${esc(br.name)}</span><div>${statLine(it.bonus) || (it.carry ? 'Carries ' + it.carry + ' ball' + (it.carry > 1 ? 's (spare ball + ball switch)' : '') : cons ? (P.consumables[it.id] || 0) + ' owned' : '')}</div>${spec}</div>${btn}</div>`;
   }
   function bindItems(root, rerender) {
-    root.querySelectorAll('[data-buy]').forEach(b => (b.onclick = () => { const r = C.buy(P, b.dataset.buy); toast(r.msg); if (r.ok) { persist(); rerender(); } }));
+    root.querySelectorAll('[data-buy]').forEach(b => (b.onclick = () => { const r = C.buy(P, b.dataset.buy); toast(r.msg); sfx(r.ok ? 'coin' : 'denied'); if (r.ok) { persist(); rerender(); } }));
     root.querySelectorAll('[data-eq]').forEach(b => (b.onclick = () => { C.equip(P, b.dataset.eq); persist(); toast('Equipped!'); rerender(); }));
   }
   RENDER.shop = () => {
@@ -1195,7 +1457,7 @@ button,.btn,select{min-height:44px}
     html += `<div class="card brock"><b>✨ Showtime Hook</b> <span class="tag">Brock only</span><div class="muted">Brock's signature move. You'll see it when he plays you.</div></div>`;
     $('#skills').innerHTML = html;
     $('#skills').querySelectorAll('[data-sk]').forEach(b => (b.onclick = () => { if (!C.toggleSkill(P, b.dataset.sk)) toast('All slots full'); persist(); RENDER.skills(); }));
-    $('#skills').querySelectorAll('[data-up]').forEach(b => (b.onclick = () => { const r = C.upgradeSkill(P, b.dataset.up); toast(r.msg); persist(); RENDER.skills(); }));
+    $('#skills').querySelectorAll('[data-up]').forEach(b => (b.onclick = () => { const r = C.upgradeSkill(P, b.dataset.up); toast(r.msg); sfx(r.ok ? 'levelup' : 'denied'); persist(); RENDER.skills(); }));
   };
   // ---------- Daily ----------
   RENDER.daily = () => {
@@ -1204,8 +1466,8 @@ button,.btn,select{min-height:44px}
     P.daily.challenges.forEach(c => { const def = D.CHALLENGES.find(x => x.id === c.id); const done = c.progress >= def.target;
       html += `<div class="card"><div class="row"><b class="grow">${esc(def.text)}</b>${c.claimed ? '<span class="tag ok">Claimed</span>' : done ? `<button class="btn small green" data-claim="${c.id}">Claim ${def.reward} 🪙</button>` : `<span class="tag">${def.reward} 🪙</span>`}</div><div class="bar" style="margin-top:6px"><i style="width:${100 * c.progress / def.target}%"></i></div><div class="muted">${c.progress}/${def.target}</div></div>`; });
     $('#daily').innerHTML = html;
-    const cs = $('#claimStreak'); if (cs) cs.onclick = () => { toast('+' + C.claimStreak(P) + ' coins!'); persist(); RENDER.daily(); };
-    $('#daily').querySelectorAll('[data-claim]').forEach(b => (b.onclick = () => { toast('+' + C.claimChallenge(P, b.dataset.claim) + ' coins!'); persist(); RENDER.daily(); }));
+    const cs = $('#claimStreak'); if (cs) cs.onclick = () => { toast('+' + C.claimStreak(P) + ' coins!'); sfx('coin'); persist(); RENDER.daily(); };
+    $('#daily').querySelectorAll('[data-claim]').forEach(b => (b.onclick = () => { toast('+' + C.claimChallenge(P, b.dataset.claim) + ' coins!'); sfx('coin'); persist(); RENDER.daily(); }));
   };
   // ---------- Club & League ----------
   RENDER.club = () => {
@@ -1247,12 +1509,12 @@ button,.btn,select{min-height:44px}
     D.PREMIUM_ITEMS.forEach(it => (html += `<div class="card row"><span style="font-size:26px">${it.type === 'coins' ? '🪙' : '⚡'}</span><div class="grow"><b>${esc(it.name)}</b><div class="muted">Convenience, no stat power</div></div><button class="btn small" data-prem="${it.id}">💎 ${it.gems}</button></div>`));
     $('#style').innerHTML = html;
     $('#style').querySelectorAll('[data-st]').forEach(b => (b.onclick = () => { styleTab = b.dataset.st; RENDER.style(); }));
-    $('#style').querySelectorAll('[data-cbuy]').forEach(b => (b.onclick = () => { const r = C.buyCosmetic(P, b.dataset.cbuy); toast(r.msg); if (r.ok) { C.equipCosmetic(P, b.dataset.cbuy); persist(); RENDER.style(); } }));
+    $('#style').querySelectorAll('[data-cbuy]').forEach(b => (b.onclick = () => { const r = C.buyCosmetic(P, b.dataset.cbuy); toast(r.msg); sfx(r.ok ? 'coin' : 'denied'); if (r.ok) { C.equipCosmetic(P, b.dataset.cbuy); persist(); RENDER.style(); } }));
     $('#style').querySelectorAll('[data-ceq]').forEach(b => (b.onclick = () => { if (b.dataset.ceq) C.equipCosmetic(P, b.dataset.ceq); else P.cos.ball = null; persist(); RENDER.style(); }));
-    const bra = $('#buyRemoveAds'); if (bra) bra.onclick = () => parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this opens the App Store / Google Play checkout for the <b>Remove Ads</b> non-consumable at <b>$2.99</b>.</p><p>Demo mode: entitlement granted, no money charged.</p>`, [{ label: 'OK', fn: () => { C.purchaseRemoveAds(P, localStorage); persist(); RENDER.style(); } }]));
+    const bra = $('#buyRemoveAds'); if (bra) bra.onclick = () => parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this opens the App Store / Google Play checkout for the <b>Remove Ads</b> non-consumable at <b>$2.99</b>.</p><p>Demo mode: entitlement granted, no money charged.</p>`, [{ label: 'OK', fn: () => { C.purchaseRemoveAds(P, localStorage); sfx('coin'); persist(); RENDER.style(); } }]));
     $('#restoreBtn').onclick = () => { const ok = C.restorePurchases(P, localStorage); persist(); toast(ok ? 'Restored: Remove Ads' : 'Nothing to restore (demo)'); RENDER.style(); };
-    $('#style').querySelectorAll('[data-pack]').forEach(b => (b.onclick = () => { const g = D.GEM_PACKS.find(x => x.id === b.dataset.pack); parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this would open the store checkout for <b>$${g.usd.toFixed(2)}</b>.</p><p>Demo mode: ${g.gems} gems added for testing. No money was charged.</p>`, [{ label: 'OK', fn: () => { P.gems += g.gems; persist(); RENDER.style(); } }])); }));
-    $('#style').querySelectorAll('[data-prem]').forEach(b => (b.onclick = () => { const it = D.PREMIUM_ITEMS.find(x => x.id === b.dataset.prem); if (P.gems < it.gems) return toast('Not enough gems'); P.gems -= it.gems; if (it.type === 'coins') P.coins += it.amount; if (it.type === 'xpboost') P.xpBoost += it.amount; persist(); toast('Got ' + it.name + '!'); RENDER.style(); }));
+    $('#style').querySelectorAll('[data-pack]').forEach(b => (b.onclick = () => { const g = D.GEM_PACKS.find(x => x.id === b.dataset.pack); parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this would open the store checkout for <b>$${g.usd.toFixed(2)}</b>.</p><p>Demo mode: ${g.gems} gems added for testing. No money was charged.</p>`, [{ label: 'OK', fn: () => { P.gems += g.gems; sfx('coin'); persist(); RENDER.style(); } }])); }));
+    $('#style').querySelectorAll('[data-prem]').forEach(b => (b.onclick = () => { const it = D.PREMIUM_ITEMS.find(x => x.id === b.dataset.prem); if (P.gems < it.gems) { sfx('denied'); return toast('Not enough gems'); } sfx('coin'); P.gems -= it.gems; if (it.type === 'coins') P.coins += it.amount; if (it.type === 'xpboost') P.xpBoost += it.amount; persist(); toast('Got ' + it.name + '!'); RENDER.style(); }));
   };
 
   // ---------- Training ----------
@@ -1275,7 +1537,7 @@ button,.btn,select{min-height:44px}
         tot += res.knocked.length; trainLane.setLabel(`Drill shot ${i + 1}/3`);
         await trainLane.roll({ standingBefore: C.RACK, knocked: res.knocked, fresh: true }, { speed: fast() ? 8 : 1.5, ballCol: ballColors(ball), hook: C.ballProfile(ball).hook, callout: res.special ? D.SKILLS[res.special].icon + ' ' + D.SKILLS[res.special].name.toUpperCase() + '!' : null });
       }
-      const r = C.train(P, trainDrill, tot / 30, now()); persist(); busy = false;
+      const r = C.train(P, trainDrill, tot / 30, now()); persist(); busy = false; if (Object.keys(r.gained).length) sfx('levelup', { delay: 0.2 });
       $('#trainOut').innerHTML = `<b>${tot}/30 pins on ${esc(pat.name)}!</b> +${r.xp} XP (${Object.keys(d.stats).map(k => D.STAT_INFO[k].label).join(', ')})${Object.keys(r.gained).length ? ` · <span class="tag ok">LEVEL UP: ${Object.entries(r.gained).map(([k, v]) => D.STAT_INFO[k].label + ' +' + v).join(', ')}</span>` : ''}`;
       $('#drillBtn').disabled = false; trainLane.reset();
     };
@@ -1294,6 +1556,7 @@ button,.btn,select{min-height:44px}
       <div class="card" style="box-shadow:none;border:2px solid #ede9fe"><b>Your ball:</b> ${esc(me.ball.name)} ${fitTxt}<div class="muted">Your rating ${C.rating(C.baseStats(P))} vs ${C.rating(ob.stats)}${cfg.mode === 'pvp' ? ' · Fair Play gear cap on' : ''} · Special shots: ${P.equippedSkills.map(id => D.SKILLS[id].icon).join(' ') || 'none'}</div>
       <label class="row" style="margin-top:6px"><input type="checkbox" id="useRosin" ${P.consumables.rosin ? '' : 'disabled'}> Use Rosin Bag (+5 Focus) · ${P.consumables.rosin || 0} left</label></div>`,
       [{ label: 'Bowl!', cls: 'green', id: 'bowlBtn', fn: () => startMatch(cfg, ob, !!window.__rosin, pat) }, { label: 'Change gear', cls: 'gray', fn: () => show('gear') }]);
+    if (ob.isRival) sfx('brock');
     fillAvatars($('#modal')); $('#useRosin').onchange = e => (window.__rosin = e.target.checked); window.__rosin = false;
   }
   let speed = 1, skip = false, lane = null;
@@ -1302,7 +1565,7 @@ button,.btn,select{min-height:44px}
     const seed = window.__seed != null ? window.__seed : (Date.now() ^ (Math.random() * 1e9)) >>> 0;
     const res = C.playMatch(P, ob, cfg.alley, seed, { fairPlay: cfg.mode === 'pvp', useRosin, scripted: cfg.scripted, patternId: pat && pat.id ? pat.id : (cfg.patternId || undefined) });
     const alley = D.ALLEYS[cfg.alley]; const ball = C.ballById(P.equipped.ball);
-    show('match'); skip = false; speed = fast() ? 8 : 1;
+    show('match'); skip = false; speed = fast() ? 8 : 1; AU.music(ob.isRival || cfg.final ? 'tense' : 'match');
     $('#match').innerHTML = `<div class="row" style="margin-bottom:6px"><b class="grow" style="color:#4c1d95">${alley.name}</b>${cfg.mode === 'pvp' ? '<span class="tag warn">SIMULATED PvP</span>' : ''}<span class="tag ${res.pattern.kind}">🛢️ ${esc(res.pattern.name)}</span></div><canvas id="lane"></canvas><div id="sc"></div><div class="speed"><button class="btn small" data-sp="1">1x</button><button class="btn small" data-sp="3">3x</button><button class="btn small orange" id="skipBtn">Skip ⏭</button></div>`;
     lane = new Lane($('#lane'), { theme: alley.theme, alleyName: alley.name, pattern: res.pattern }); window.__lane = lane;
     $('#match').querySelectorAll('[data-sp]').forEach(b => (b.onclick = () => (speed = +b.dataset.sp)));
@@ -1343,6 +1606,7 @@ button,.btn,select{min-height:44px}
       if (drills.length) extra += dialog(hal().look, `Coach Hal: "New drill: ${esc(drills[0].name)}. ${esc(drills[0].hal)}"`);
       if (rw.champion) extra += `<p class="banner">🏆 YOU ARE THE PBA CHAMPION! 🏆</p>` + dialog(hal().look, esc(D.MENTOR.finalWin)) + `<p class="muted">${esc(D.STORY[5].outro)}</p>`;
     }
+    AU.stinger(rw.champion ? 'champion' : res.win ? 'win' : 'loss', 'menu', rw.champion ? 5200 : 3400); if (ups) sfx('levelup', { delay: rw.champion ? 2.6 : 1.7 });
     const canRew = C.canWatchRewarded(P, now());
     modal(`<h2>${res.win ? '🏆 You win!' : '😅 So close!'}</h2><p style="font-size:22px;text-align:center"><b>${res.player.total}</b> – ${res.opponent.total}</p><p>+${rw.xp} XP to every stat · +${rw.coins} coins${cfg.mode === 'pvp' ? ` · PvP rating ${P.pvp.rating}` : ''}${rw.counts.specials ? ` · ${rw.counts.specials} special shot(s)` : ''}</p>${ups ? `<p class="tag ok" style="display:block;padding:6px">LEVEL UP: ${ups}</p>` : ''}${extra}`,
       [...(canRew ? [{ label: '🎬 Watch demo reward ad: +' + Math.max(25, Math.round(rw.coins * D.AD_CONFIG.rewardedCoinBonus)) + ' coins (optional)', cls: 'blue', id: 'rewardBtn', fn: () => rewardedAd(rw.coins, () => afterMatch(cfg)) }] : []), { label: 'Continue', cls: 'green', id: 'continueBtn', fn: () => afterMatch(cfg) }]);
@@ -1350,10 +1614,11 @@ button,.btn,select{min-height:44px}
     window.__lastMatch = { res, rw };
   }
   function adModal(title, secs, onDone, rewarded) {
+    AU.duck(true); const done = onDone; onDone = () => { AU.duck(false); done && done(); };
     modal(`<div class="adfull"><div style="font-size:42px">📺</div>${title}<br><small>Placeholder DEMO ad · no real ad network · no tracking</small></div><p class="muted" id="adTimer">Close in ${secs}s</p>`, [{ label: rewarded ? 'Collect reward' : 'Close ad', id: 'adClose', disabled: secs > 0, fn: onDone }]);
     let s = secs; const t = setInterval(() => { s--; const el = $('#adTimer'), b = $('#adClose'); if (el) el.textContent = s > 0 ? `Close in ${s}s` : 'You can close the ad'; if (s <= 0) { clearInterval(t); if (b) b.disabled = false; } }, 1000);
   }
-  function rewardedAd(baseCoins, then) { adModal('DEMO REWARDED AD', fast() ? 0 : 3, () => { const c = C.grantRewarded(P, baseCoins, now()); persist(); toast('+' + c + ' bonus coins!'); then(); }, true); }
+  function rewardedAd(baseCoins, then) { adModal('DEMO REWARDED AD', fast() ? 0 : 3, () => { const c = C.grantRewarded(P, baseCoins, now()); persist(); sfx('coin'); toast('+' + c + ' bonus coins!'); then(); }, true); }
   function afterMatch(cfg) {
     const go = () => show(cfg.mode === 'story' ? 'story' : cfg.mode === 'pvp' ? 'pvp' : 'hub');
     if (C.shouldShowInterstitial(P, false)) { C.markInterstitialShown(P); persist(); adModal('DEMO INTERSTITIAL AD', fast() ? 0 : 3, go); }
@@ -1375,10 +1640,11 @@ button,.btn,select{min-height:44px}
     document.querySelectorAll('.screen:not(#create):not(#match)').forEach(s => { const b = document.createElement('button'); b.className = 'btn gray back'; b.textContent = '⬅ Home'; b.onclick = () => show('hub'); s.after(b); b.dataset.for = s.id; });
     const obs = new MutationObserver(() => document.querySelectorAll('.back').forEach(b => (b.style.display = $('#' + b.dataset.for).classList.contains('active') && b.dataset.for !== 'hub' ? 'block' : 'none')));
     document.querySelectorAll('.screen').forEach(s => obs.observe(s, { attributes: true, attributeFilter: ['class'] }));
+    document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('button, .btn, select, canvas[style*="pointer"]'); if (!b || b.disabled) return; if (b.classList.contains('sndbtn')) show('settings'); sfx('click'); });
     P = C.load(); if (P && !P.version) P = null;
     if (P) { C.unlockSkills(P); C.restorePurchases(P, localStorage); C.dailyCheck(P, now()); persist(); show('hub'); } else show('create');
   }
-  window.StrikeQuest = window.PinMasters = { getPlayer: () => P, show, toast, laneDemo, preMatch, save: persist };
+  window.StrikeQuest = window.PinMasters = { getPlayer: () => P, audio: AU, show, toast, laneDemo, preMatch, save: persist };
   document.addEventListener('DOMContentLoaded', boot);
 })();
 </script>
