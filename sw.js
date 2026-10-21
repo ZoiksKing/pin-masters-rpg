@@ -1,5 +1,5 @@
-// Pin Masters RPG service worker: cache-first app shell for offline play. Version changes on every build.
-const CACHE = 'pin-masters-52d6429b39';
+// Pin Masters RPG v0.4.0 service worker: cache-first app shell for offline play. Version changes on every build.
+const CACHE = 'pin-masters-5ca7f27226';
 const FILES = ["./","./assets/audio/manifest.json","./index.html","./manifest.webmanifest","./icons/apple-touch-icon.png","./icons/icon-192.png","./icons/icon-512.png","./icons/icon-maskable-512.png"];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });

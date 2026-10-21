@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.4.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -80,6 +80,30 @@ button,.btn,select{min-height:44px}
 .sndbtn:active{transform:translateY(2px);box-shadow:none}
 .toggle{min-width:64px}
 .vol{margin-top:8px}.vol input[type=range]{accent-color:#7c3aed;height:32px;min-width:0}
+
+/* ---- Guided tutorial + Coach Hal tips (v0.4) ---- */
+.tut{position:fixed;inset:0;z-index:40;display:none}
+.tut.show{display:block}
+.tut svg{position:absolute;inset:0;width:100%;height:100%}
+.tut-ring{position:fixed;z-index:41;border:3px solid #facc15;border-radius:18px;box-shadow:0 0 0 4px #facc1566,0 0 18px #facc15;pointer-events:none;animation:tutPulse 1.2s ease-in-out infinite}
+@keyframes tutPulse{50%{box-shadow:0 0 0 8px #facc1533,0 0 26px #facc15}}
+.tut-lift{position:relative;z-index:42}
+.tut-bubble{position:fixed;left:50%;transform:translateX(-50%);width:min(452px,calc(100% - 20px));z-index:43;background:#fff;border-radius:20px;padding:12px;box-shadow:0 6px 0 #7c3aed,0 10px 30px #0006;border:3px solid #a78bfa}
+.tut-bubble .hd{display:flex;gap:10px;align-items:flex-start}
+.tut-bubble .hd canvas{flex:none;border-radius:50%;background:#ede9fe}
+.tut-bubble .who{font-weight:900;color:#4c1d95;font-size:14px}
+.tut-bubble .say{font-size:16px;line-height:1.35;margin-top:2px}
+.tut-bubble .cnt{font-size:11px;font-weight:800;color:#7c3aed;white-space:nowrap}
+.tut-bubble .bb{display:flex;gap:8px;margin-top:10px;align-items:center}
+.tut-bubble .bb .btn{width:auto;flex:1}
+.tut-bubble .bb .btn.gray{flex:0 0 auto;font-size:13px;padding:8px 12px}
+.tut-bubble .hint{font-weight:800;color:#c2410c;font-size:14px;flex:1}
+.tipwrap{position:fixed;inset:auto 0 calc(70px + env(safe-area-inset-bottom)) 0;z-index:15;pointer-events:none;display:none}
+.tipwrap.show{display:block}
+.tipwrap .tut-bubble{position:relative;pointer-events:auto;bottom:auto;box-shadow:0 5px 0 #22c55e,0 8px 22px #0005;border-color:#86efac}
+.tutinline{border:3px solid #facc15;border-radius:16px;background:#fffbea;padding:4px 6px 0}
+.tutmatch{position:fixed;top:calc(6px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(452px,calc(100% - 16px));z-index:12;display:flex;gap:8px;align-items:center;background:#fffbeaf2;border:3px solid #facc15;border-radius:14px;padding:5px 8px;font-size:13px;line-height:1.3;pointer-events:none;box-shadow:0 4px 12px #0004}
+.tutmatch .tav canvas{display:block;border-radius:50%;background:#ede9fe}
 </style></head>
 <body><div id="app">
 <section class="screen" id="create"></section><section class="screen" id="hub"></section><section class="screen" id="story"></section>
@@ -349,7 +373,41 @@ button,.btn,select{min-height:44px}
   const RIVAL_FIRST = ['Ace', 'Bowlie', 'Pinny', 'Rolla', 'Sparky', 'Turbo', 'Lucky', 'Ziggy', 'Mango', 'Pixel', 'Nova', 'Echo', 'Comet', 'Waffles', 'Jinx'];
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
-  return { STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, RIVAL_FIRST, RIVAL_LAST };
+  // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
+  const APP_VERSION = '0.4.0';
+  const TUTORIAL = {
+    reward: 100,
+    steps: [
+      { id: 'stats', screen: 'hub', target: ['[data-go=stats]'], text: 'You don\'t aim the ball - the game bowls for you! Your 5 stats decide every roll: 💪 Power, 🎯 Accuracy, 🌀 Spin, 📏 Consistency and 🧠 Focus.' },
+      { id: 'xp', screen: 'hub', target: ['.topbar .pill:not(.gem)', '[data-go=training]'], text: 'Every match gives your stats XP and earns 🪙 coins, win or lose. Want a stat to grow faster? Train it with drills at the Practice Alley.' },
+      { id: 'gear', screen: 'hub', target: ['[data-go=shop]', '[data-go=gear]', '[data-go=guide]'], text: 'Spend coins on balls and gear at the Pro Shops, then equip them in My Gear. Match your ball to the oil: the Lane Guide shows how.' },
+      { id: 'story', screen: 'hub', target: ['[data-go=story]'], action: true, text: 'Enough talk - let\'s bowl! Tap Story to start your career.', altText: 'Story mode takes you from rookie to PBA Champion. On the scorecard, X is a strike (all 10 pins with one ball) and / is a spare (all 10 with two).', altSkipTo: 'daily' },
+      { id: 'storyBowl', screen: 'story', target: ['#story button.green[data-ch]'], action: true, backTo: 'story', text: 'This is Chapter 1. Tap Bowl! to play your very first match.' },
+      { id: 'match', screen: 'match', inline: true, backTo: 'story', text: 'Watch the scorecard! X = strike (all 10 pins with the first ball). / = spare (all 10 with two balls). Tap Skip ⏭ to jump to the end.' },
+      { id: 'afterMatch', screen: 'story', text: 'Good effort! Even when you lose you still earn XP and coins. Brock always wins the first time - beat him in a rematch later and make him eat his words!', textWin: 'What a start! Matches give XP and coins, and wins move you through the story.' },
+      { id: 'daily', screen: 'hub', target: ['[data-go=daily]'], text: 'Check Daily every day for challenges and coin rewards. Come back day after day to grow your 🔥 streak bonus.' },
+      { id: 'skills', screen: 'hub', target: ['[data-go=skills]'], text: 'Special Shots pop up now and then during a match for a big result. Equip them and upgrade them with coins.' },
+      { id: 'club', screen: 'hub', target: ['[data-go=club]'], text: 'Join or start a Club, then bowl League Night. Every pin you knock down helps your club climb the weekly table.' },
+      { id: 'pvp', screen: 'hub', target: ['[data-go=pvp]', '[data-go=leaderboard]'], text: 'Ready for a challenge? Battle rivals in PvP and climb the Leaderboard.' },
+      { id: 'settings', screen: 'hub', target: ['#hub .sndbtn', '[data-go=settings]'], last: true, text: 'Tap 🔊 or Settings to change sound and music. You can replay this tour in Settings anytime. Now go become a champion!' }
+    ],
+    tips: {
+      shop: 'Pro Shops sell balls and gear for coins. New shops open as you clear chapters. Shiny pearl and solid balls hook more on heavy oil.',
+      gear: 'Tap Equip to use a ball or gear. Bigger bags carry a second ball, which helps when the oil breaks down.',
+      training: 'Pick a drill and tap Start drill. Each drill trains the stats shown on its button. You can practice on any oil pattern you\'ve unlocked.',
+      pvp: 'These rivals are pretend players made on your phone. Win to raise your PvP rating!',
+      guide: 'Short oil = less hook, so aim matters. Long or heavy oil = use a stronger ball.',
+      skills: 'Equip your best Special Shots. A third slot opens after Chapter 4.',
+      daily: 'Claim your streak bonus every day, and finish challenges for extra coins.',
+      club: 'Pick a club, then bowl League Night. Rewards pay out every week.',
+      leaderboard: 'Your Rating is the sum of your stats. Train and win to climb!',
+      style: 'Outfits, ball designs and celebrations only change how you look, not your stats.',
+      brock: 'That\'s Brock "Showtime" Sterling. He\'s cocky, but every great bowler has a rival. Keep training!',
+      sport: 'Sport patterns are tough: misses get punished. High Accuracy and Consistency help a lot here.'
+    }
+  };
+
+  return { APP_VERSION, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, RIVAL_FIRST, RIVAL_LAST };
 });
 </script><script>/* Pin Masters RPG core logic: pure functions (no DOM) so it can be unit-tested in Node
  * and later run on a server for authoritative PvP. */
@@ -592,7 +650,8 @@ button,.btn,select{min-height:44px}
       version: 2, name: (name || 'Rookie').slice(0, 16), coins: 300, gems: 0, stats,
       inventory: ['house_ball', 'shoe_rental', 'bag_tote'], consumables: { rosin: 1, cleaner: 1 },
       equipped: { ball: 'house_ball', shoes: 'shoe_rental', bag: 'bag_tote' }, ballCondition: { house_ball: 1 },
-      xpBoost: 0, story: { chapter: 1, beaten: 0 }, pvp: { rating: 1000, wins: 0, losses: 0 }, best: 0, matches: 0, wins: 0, history: []
+      xpBoost: 0, story: { chapter: 1, beaten: 0 }, pvp: { rating: 1000, wins: 0, losses: 0 }, best: 0, matches: 0, wins: 0, history: [],
+      tutorial: { status: 'new', step: 0, tips: true, seen: {}, offered: true, rewarded: false }
     });
   }
   // Fill in fields added in later versions (keeps old saves compatible).
@@ -607,8 +666,28 @@ button,.btn,select{min-height:44px}
     p.ads = p.ads || { sinceInterstitial: 0, rewardedDate: null, rewardedToday: 0, shown: 0 };
     p.entitlements = p.entitlements || { removeAds: false };
     p.seen = p.seen || {}; p.version = 2;
+    // Saves from before v0.4 have no tutorial flag: never force the full tour on them; offer it once and turn on contextual tips.
+    if (!p.tutorial) p.tutorial = { status: 'legacy', step: 0, tips: true, seen: {}, offered: false, rewarded: false };
+    p.tutorial.seen = p.tutorial.seen || {};
     return p;
   }
+  // ---------- Tutorial (status: new -> active -> done | skipped; legacy = old save; declined = said no to the offer) ----------
+  const tutSteps = () => D.TUTORIAL.steps;
+  function tutActive(p) { return !!p && !!p.tutorial && p.tutorial.status === 'active'; }
+  function tutStep(p) { return tutActive(p) ? tutSteps()[p.tutorial.step] || null : null; }
+  function tutStart(p) { migrate(p); p.tutorial.status = 'active'; p.tutorial.step = 0; p.tutorial.offered = true; return tutStep(p); }
+  function tutGoto(p, id) { const i = tutSteps().findIndex(s => s.id === id); if (i >= 0 && tutActive(p)) p.tutorial.step = i; return tutStep(p); }
+  function tutAdvance(p) { if (!tutActive(p)) return null; p.tutorial.step++; if (p.tutorial.step >= tutSteps().length) return tutComplete(p), null; return tutStep(p); }
+  // Finishing pays the reward once per save (replays never pay twice). Skipping pays nothing.
+  function tutComplete(p) { migrate(p); const first = !p.tutorial.rewarded; p.tutorial.status = 'done'; p.tutorial.step = 0; p.tutorial.tips = true; if (first) { p.tutorial.rewarded = true; p.coins += D.TUTORIAL.reward; } return first ? D.TUTORIAL.reward : 0; }
+  function tutSkip(p) { migrate(p); p.tutorial.status = 'skipped'; p.tutorial.step = 0; p.tutorial.tips = false; p.tutorial.offered = true; }
+  function tutDecline(p) { migrate(p); p.tutorial.status = 'declined'; p.tutorial.offered = true; p.tutorial.tips = true; }
+  function tutReplay(p) { return tutStart(p); }
+  function tutShouldOffer(p) { return !!p && !!p.tutorial && p.tutorial.status === 'legacy' && !p.tutorial.offered; }
+  function tipsOn(p) { return !!p && !!p.tutorial && !tutActive(p) && p.tutorial.status !== 'new' && p.tutorial.tips !== false; }
+  function tipDue(p, id) { return tipsOn(p) && !!D.TUTORIAL.tips[id] && !p.tutorial.seen[id]; }
+  function markTip(p, id) { migrate(p); p.tutorial.seen[id] = true; }
+  function setTips(p, on) { migrate(p); p.tutorial.tips = !!on; }
   const baseStats = p => { const o = {}; D.STATS.forEach(k => (o[k] = p.stats[k].level)); return o; };
   const chaptersCleared = p => p.story.chapter - 1;
   function isUnlocked(p, what) { return chaptersCleared(p) >= (what.unlockChapter || 0); }
@@ -832,7 +911,8 @@ button,.btn,select{min-height:44px}
     skillSlots, skillUpgradeCost, unlockSkills, upgradeSkill, toggleSkill, dateStr, dailyCheck, recordDaily, streakBonus, claimStreak, claimChallenge,
     weekKey, JOINABLE, createClub, joinClub, leaveClub, clubTable, clubCheck, leagueNight, cosById, buyCosmetic, equipCosmetic,
     shouldShowInterstitial, markInterstitialShown, bannerVisible, canWatchRewarded, grantRewarded, purchaseRemoveAds, restorePurchases,
-    generateRivals, leaderboard, tierOf, save, load, data: D };
+    generateRivals, leaderboard, tierOf, save, load, data: D,
+    tutActive, tutStep, tutStart, tutGoto, tutAdvance, tutComplete, tutSkip, tutDecline, tutReplay, tutShouldOffer, tipsOn, tipDue, markTip, setTips };
 });
 </script><script>/* Pin Masters RPG audio: 100% original, procedurally synthesized Web Audio sound effects and music.
    No external or copyrighted files. Optional overrides: drop MP3/WAV/OGG files in assets/audio/ and list them in
@@ -1263,13 +1343,13 @@ button,.btn,select{min-height:44px}
   // ---------- helpers ----------
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
   const RENDER = {};
-  function show(id) { current = id; if (id !== 'match') AU.music('menu'); if (RENDER[id]) RENDER[id](); document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id)); window.scrollTo(0, 0); }
+  function show(id) { current = id; if (id !== 'match') AU.music('menu'); if (RENDER[id]) RENDER[id](); document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id)); window.scrollTo(0, 0); tutRefresh(); }
   function modal(html, buttons) {
     const m = $('#modal'); $('#modalBody').innerHTML = html; const bb = $('#modalBtns'); bb.innerHTML = '';
-    (buttons || [{ label: 'OK' }]).forEach(b => { const e = document.createElement('button'); e.className = 'btn ' + (b.cls || ''); e.textContent = b.label; e.style.marginTop = '8px'; if (b.id) e.id = b.id; if (b.disabled) e.disabled = true; e.onclick = () => { if (!b.keep) m.classList.remove('show'); b.fn && b.fn(); }; bb.appendChild(e); });
-    m.classList.add('show');
+    (buttons || [{ label: 'OK' }]).forEach(b => { const e = document.createElement('button'); e.className = 'btn ' + (b.cls || ''); e.textContent = b.label; e.style.marginTop = '8px'; if (b.id) e.id = b.id; if (b.disabled) e.disabled = true; e.onclick = () => { if (!b.keep) m.classList.remove('show'); b.fn && b.fn(); if (!b.keep) tutRefresh(); }; bb.appendChild(e); });
+    m.classList.add('show'); tutHide(); tipHide();
   }
-  const closeModal = () => $('#modal').classList.remove('show');
+  const closeModal = () => { $('#modal').classList.remove('show'); tutRefresh(); };
   function topbar() {
     const r = C.rating(C.baseStats(P));
     return `<div class="topbar"><span style="font-size:22px">🎳</span><span class="nm">${esc(P.name)} <span class="tag">${C.tierOf(r)} · ${r}</span></span><span class="pill">🪙 ${P.coins}</span><span class="pill gem">💎 ${P.gems}</span><button class="sndbtn" title="Sound settings" aria-label="Sound settings">${AU.settings().sfx || AU.settings().music ? '🔊' : '🔇'}</button></div>` +
@@ -1328,7 +1408,7 @@ button,.btn,select{min-height:44px}
     const looks = [0, 1, 2, 3].map(i => lookFor('look' + i * 7)); let sel = 0; const lr = $('#lookRow');
     looks.forEach((lk, i) => { const c = avatar(lk, 56); c.style.borderRadius = '50%'; c.style.cursor = 'pointer'; c.style.background = i === sel ? '#ddd6fe' : '#fff'; c.onclick = () => { sel = i; [...lr.children].forEach((x, j) => (x.style.background = j === sel ? '#ddd6fe' : '#fff')); }; lr.appendChild(c); });
     $('#startBtn').onclick = () => { const n = $('#nameIn').value.trim() || 'Rookie'; P = C.newPlayer(n); P.look = looks[sel]; C.dailyCheck(P, now()); persist();
-      modal(`<h2>Welcome, ${esc(P.name)}!</h2>` + dialog(hal().look, `Coach Hal: "I'm Hal Quimby - I bowled on tour for thirty years. Win matches, train at the Practice Alley, and there's no limit to how good you can get. Oh, and watch out for a show-off named Brock..."`), [{ label: "Let's bowl!", cls: 'green', fn: () => show('hub') }]); fillAvatars($('#modal')); };
+      modal(`<h2>Welcome, ${esc(P.name)}!</h2>` + dialog(hal().look, `Coach Hal: "I'm Hal Quimby - I bowled on tour for thirty years. Win matches, train at the Practice Alley, and there's no limit to how good you can get. Oh, and watch out for a show-off named Brock... Let me show you around!"`), [{ label: "Let's go!", cls: 'green', id: 'welcomeBtn', fn: () => { C.tutStart(P); persist(); show('hub'); } }]); fillAvatars($('#modal')); };
   };
   RENDER.hub = () => {
     const done = P.story.chapter > D.STORY.length; const ch = D.STORY[Math.min(P.story.chapter, D.STORY.length) - 1];
@@ -1337,7 +1417,7 @@ button,.btn,select{min-height:44px}
     $('#hub').innerHTML = topbar() + `<div class="card row"><span id="hubAv"></span><div class="grow"><b>${done ? '🏆 PBA Champion!' : 'Chapter ' + ch.id + ': ' + ch.title}</b><div class="muted">${P.wins} wins · ${P.matches} matches · best ${P.best} · 🔥 ${P.daily.streak}-day streak</div></div></div>
     <div class="grid3">${B('story', '📖', 'Story', 'orange')}${B('pvp', '⚔️', 'PvP (sim)', 'blue')}${B('training', '🏋️', 'Practice', 'green')}${B('daily', '📅', 'Daily', 'pink', dailyReady)}${B('club', '🛡️', 'Club & League', '')}${B('skills', '💥', 'Special Shots', 'orange')}${B('shop', '🛍️', 'Pro Shops', 'pink')}${B('style', '👕', 'Style Shop', 'blue')}${B('gear', '🎒', 'My Gear', 'green')}${B('guide', '🛢️', 'Lane Guide', '')}${B('alleys', '🗺️', 'Alleys', 'orange')}${B('stats', '📊', 'Stats', 'green')}</div>
     <div class="grid" style="margin-top:8px"><button class="btn big" data-go="leaderboard"><span class="ic">🏅</span>Leaderboard</button><button class="btn big blue" data-go="settings"><span class="ic">⚙️</span>Settings</button></div>
-    <p class="muted" style="text-align:center">Prototype build · saves to this device · <a href="#" id="resetLink">reset save</a></p>`;
+    <p class="muted" style="text-align:center">Prototype v${D.APP_VERSION} · saves to this device · <a href="#" id="resetLink">reset save</a></p>`;
     $('#hubAv').appendChild(avatar(playerLook(), 52));
     $('#hub').querySelectorAll('[data-go]').forEach(b => (b.onclick = () => show(b.dataset.go)));
     $('#resetLink').onclick = e => { e.preventDefault(); modal('<h2>Reset save?</h2><p>This erases your bowler on this device. (Remove Ads can be restored with Restore Purchases.)</p>', [{ label: 'Erase', cls: 'orange', fn: () => { localStorage.removeItem(C.SAVE_KEY); localStorage.removeItem(C.LEGACY_SAVE_KEY); location.reload(); } }, { label: 'Cancel', cls: 'gray' }]); };
@@ -1403,13 +1483,15 @@ button,.btn,select{min-height:44px}
     const row = (id, ic, label, desc, on, vol) => `<div class="card"><div class="row"><span style="font-size:28px">${ic}</span><div class="grow"><b>${label}</b><div class="muted">${desc}</div></div><button class="btn small toggle ${on ? 'green' : 'gray'}" id="${id}Toggle" role="switch" aria-checked="${on}">${on ? 'ON' : 'OFF'}</button></div><label class="row vol"><span class="muted">Volume</span><input type="range" class="grow" id="${id}Vol" min="0" max="100" step="5" value="${Math.round(vol * 100)}" ${on ? '' : 'disabled'}><b id="${id}VolTxt" style="width:42px;text-align:right">${Math.round(vol * 100)}%</b></label></div>`;
     $('#settings').innerHTML = topbar() + `<h2>⚙️ Settings</h2>${sup ? '' : '<div class="banner">This browser has no Web Audio support, so the game will be silent.</div>'}` +
       row('sfx', '🔊', 'Sound Effects', 'Ball roll, pin crashes, cheers, buttons', st.sfx, st.sfxVol) + row('music', '🎵', 'Music', 'Menu, match and rival themes', st.music, st.musicVol) +
-      `<button class="btn" id="testSfx">▶ Test sound</button><div class="card muted" style="margin-top:10px">All sounds and music are original and made in code. Settings save on this device.<br>📱 iPhone: if you hear nothing, turn off Silent Mode (the switch on the side of the phone) and turn the volume up.</div>`;
+      `<button class="btn" id="testSfx">▶ Test sound</button><h2 style="margin-top:14px">🎓 Coach Hal</h2><div class="card"><div class="row"><span style="font-size:28px">💡</span><div class="grow"><b>Coach tips</b><div class="muted">A quick tip the first time you open a screen</div></div><button class="btn small toggle ${P.tutorial.tips !== false ? 'green' : 'gray'}" id="tipsToggle" role="switch" aria-checked="${P.tutorial.tips !== false}">${P.tutorial.tips !== false ? 'ON' : 'OFF'}</button></div><button class="btn green" id="replayTut" style="margin-top:8px">🔁 Replay tutorial</button><div class="muted" style="margin-top:4px">${P.tutorial.rewarded ? 'Tour reward already collected.' : `Finish the tour to earn ${D.TUTORIAL.reward} coins.`}</div></div><div class="card muted" style="margin-top:10px">All sounds and music are original and made in code. Settings save on this device.<br>📱 iPhone: if you hear nothing, turn off Silent Mode (the switch on the side of the phone) and turn the volume up.</div>`;
     const bind = k => {
       $('#' + k + 'Toggle').onclick = () => { const on = !AU.settings()[k]; AU.set({ [k]: on }); if (on && k === 'sfx') setTimeout(() => sfx('coin'), 30); RENDER.settings(); };
       const sl = $('#' + k + 'Vol'); sl.oninput = () => { $('#' + k + 'VolTxt').textContent = sl.value + '%'; AU.set({ [k + 'Vol']: sl.value / 100 }); };
       sl.onchange = () => { if (k === 'sfx') sfx('pins', { count: 4 }); };
     };
     bind('sfx'); bind('music');
+    $('#tipsToggle').onclick = () => { C.setTips(P, P.tutorial.tips === false); persist(); RENDER.settings(); };
+    $('#replayTut').onclick = () => { C.tutReplay(P); persist(); show('hub'); };
     $('#testSfx').onclick = () => { sfx('release'); sfx('pins', { count: 10, strike: true, delay: 0.5 }); sfx('strike', { delay: 0.7 }); };
   };
 
@@ -1552,7 +1634,7 @@ button,.btn,select{min-height:44px}
     const look = ob.isRival ? D.RIVAL.look : ob.pro && ob.pro.look ? ob.pro.look : lookFor(ob.name);
     modal(`<h2>${cfg.mode === 'pvp' ? '⚔️ PvP (simulated)' : cfg.mode === 'story' ? (cfg.final ? '🏆 Title Final' : '📖 Story match') : '🎳 Exhibition'}</h2><div class="muted">${alley.name} · difficulty ${alley.difficulty}</div>
       ${dialog(look, `<b>${esc(ob.name)}${ob.isRival ? ' "Showtime"' : ''}:</b> "${esc(cfg.line || 'Good luck!')}"`, ob.isRival ? 'brock' : '')}
-      ${patternCard(pat)}${dialog(hal().look, `Coach Hal: "${pat.kind === 'sport' ? 'Sport shot - misses get punished. ' : ''}Try a ${C.recommendBall(pat).toLowerCase()} here.${C.altBallHook(P) != null ? ' Your second ball is ready for when the lanes break down.' : ''}"`)}
+      ${ob.isRival ? modalTip('brock') : ''}${pat.kind === 'sport' ? modalTip('sport') : ''}${patternCard(pat)}${dialog(hal().look, `Coach Hal: "${pat.kind === 'sport' ? 'Sport shot - misses get punished. ' : ''}Try a ${C.recommendBall(pat).toLowerCase()} here.${C.altBallHook(P) != null ? ' Your second ball is ready for when the lanes break down.' : ''}"`)}
       <div class="card" style="box-shadow:none;border:2px solid #ede9fe"><b>Your ball:</b> ${esc(me.ball.name)} ${fitTxt}<div class="muted">Your rating ${C.rating(C.baseStats(P))} vs ${C.rating(ob.stats)}${cfg.mode === 'pvp' ? ' · Fair Play gear cap on' : ''} · Special shots: ${P.equippedSkills.map(id => D.SKILLS[id].icon).join(' ') || 'none'}</div>
       <label class="row" style="margin-top:6px"><input type="checkbox" id="useRosin" ${P.consumables.rosin ? '' : 'disabled'}> Use Rosin Bag (+5 Focus) · ${P.consumables.rosin || 0} left</label></div>`,
       [{ label: 'Bowl!', cls: 'green', id: 'bowlBtn', fn: () => startMatch(cfg, ob, !!window.__rosin, pat) }, { label: 'Change gear', cls: 'gray', fn: () => show('gear') }]);
@@ -1566,8 +1648,8 @@ button,.btn,select{min-height:44px}
     const res = C.playMatch(P, ob, cfg.alley, seed, { fairPlay: cfg.mode === 'pvp', useRosin, scripted: cfg.scripted, patternId: pat && pat.id ? pat.id : (cfg.patternId || undefined) });
     const alley = D.ALLEYS[cfg.alley]; const ball = C.ballById(P.equipped.ball);
     show('match'); skip = false; speed = fast() ? 8 : 1; AU.music(ob.isRival || cfg.final ? 'tense' : 'match');
-    $('#match').innerHTML = `<div class="row" style="margin-bottom:6px"><b class="grow" style="color:#4c1d95">${alley.name}</b>${cfg.mode === 'pvp' ? '<span class="tag warn">SIMULATED PvP</span>' : ''}<span class="tag ${res.pattern.kind}">🛢️ ${esc(res.pattern.name)}</span></div><canvas id="lane"></canvas><div id="sc"></div><div class="speed"><button class="btn small" data-sp="1">1x</button><button class="btn small" data-sp="3">3x</button><button class="btn small orange" id="skipBtn">Skip ⏭</button></div>`;
-    lane = new Lane($('#lane'), { theme: alley.theme, alleyName: alley.name, pattern: res.pattern }); window.__lane = lane;
+    $('#match').innerHTML = `<div class="row" style="margin-bottom:6px"><b class="grow" style="color:#4c1d95">${alley.name}</b>${cfg.mode === 'pvp' ? '<span class="tag warn">SIMULATED PvP</span>' : ''}<span class="tag ${res.pattern.kind}">🛢️ ${esc(res.pattern.name)}</span></div><canvas id="lane"></canvas><div id="sc"></div><div class="speed"><button class="btn small" data-sp="1">1x</button><button class="btn small" data-sp="3">3x</button><button class="btn small orange" id="skipBtn">Skip ⏭</button></div>${C.tutStep(P) && C.tutStep(P).id === 'match' ? `<div class="tutmatch" id="tutMatchTip"><span class="tav"></span><div><b>Coach Hal:</b> ${esc(C.tutStep(P).text)}</div></div>` : ''}`;
+    lane = new Lane($('#lane'), { theme: alley.theme, alleyName: alley.name, pattern: res.pattern }); window.__lane = lane; { const tv = $('#tutMatchTip .tav'); if (tv) tv.appendChild(avatar(hal().look, 34)); }
     $('#match').querySelectorAll('[data-sp]').forEach(b => (b.onclick = () => (speed = +b.dataset.sp)));
     $('#skipBtn').onclick = () => (skip = true);
     const A = { name: P.name, rolls: [] }, B = { name: ob.name, rolls: [] };
@@ -1588,7 +1670,8 @@ button,.btn,select{min-height:44px}
       }
     }
     lane.setBadge(null);
-    const rw = C.applyMatch(P, res, cfg.mode, { oppIndex: cfg.oppIndex, rival: cfg.rival, now: now() }); if (rw.storyMsg) C.unlockSkills(P); persist();
+    const rw = C.applyMatch(P, res, cfg.mode, { oppIndex: cfg.oppIndex, rival: cfg.rival, now: now() }); if (rw.storyMsg) C.unlockSkills(P);
+    if (C.tutStep(P) && C.tutStep(P).id === 'match') { TUT.lastWin = res.win; C.tutGoto(P, 'afterMatch'); } persist();
     const ups = Object.entries(rw.ups).map(([k, v]) => `${D.STAT_INFO[k].icon} ${D.STAT_INFO[k].label} +${v}`).join(' · ');
     let extra = '';
     if (ob.isRival) {
@@ -1635,6 +1718,100 @@ button,.btn,select{min-height:44px}
     return L;
   }
 
+  // ---------- Guided tutorial (Coach Hal) + contextual tips ----------
+  const TUT = { lastWin: false };
+  const visibleEls = sels => sels.flatMap(s => [...document.querySelectorAll(s)]).filter(e => e.getClientRects().length && !e.closest('.screen:not(.active)'));
+  const tutStory = () => P.story.chapter > 1 || P.story.beaten > 0; // already played story -> story steps become one info step
+  function halHead(text, cnt) { return `<div class="hd"><span class="tav"></span><div class="grow"><div class="row"><span class="who grow">Coach Hal</span>${cnt ? `<span class="cnt">${cnt}</span>` : ''}</div><div class="say">${text}</div></div></div>`; }
+  function putHalAvatar(root) { const s = root.querySelector('.tav'); if (s && !s.firstChild) s.appendChild(avatar(hal().look, 48)); }
+  function tutEls() {
+    let o = $('#tut');
+    if (!o) { o = document.createElement('div'); o.id = 'tut'; o.className = 'tut'; o.setAttribute('role', 'dialog'); o.setAttribute('aria-label', 'Tutorial');
+      o.innerHTML = '<svg aria-hidden="true"><defs><mask id="tutMask"><rect width="100%" height="100%" fill="#fff"/><g id="tutHoles"></g></mask></defs><rect width="100%" height="100%" fill="rgba(20,12,48,.66)" mask="url(#tutMask)"/></svg><div id="tutRings"></div><div class="tut-bubble" id="tutBubble"></div>';
+      document.body.appendChild(o); o.addEventListener('click', e => { if (e.target === o || e.target.closest('svg')) e.stopPropagation(); }); }
+    return o;
+  }
+  function tutHide() { const o = $('#tut'); if (o) o.classList.remove('show'); document.querySelectorAll('.tut-lift').forEach(e => e.classList.remove('tut-lift')); }
+  function tipHide() { const w = $('#tipWrap'); if (w) w.classList.remove('show'); }
+  function stepIndex() { return P.tutorial.step; }
+  function tutLayout() {
+    const o = $('#tut'); if (!o || !o.classList.contains('show')) return; const els = TUT.els || [];
+    const pad = 6, rects = els.map(e => e.getBoundingClientRect()).filter(r => r.width);
+    $('#tutHoles').innerHTML = rects.map(r => `<rect x="${r.left - pad}" y="${r.top - pad}" width="${r.width + pad * 2}" height="${r.height + pad * 2}" rx="16" fill="#000"/>`).join('');
+    $('#tutRings').innerHTML = rects.map(r => `<div class="tut-ring" style="left:${r.left - pad}px;top:${r.top - pad}px;width:${r.width + pad * 2}px;height:${r.height + pad * 2}px"></div>`).join('');
+    const b = $('#tutBubble'), h = b.offsetHeight, H = innerHeight, m = 10;
+    const cands = [['top', m], ['bottom', H - h - m], ['mid', (H - h) / 2]];
+    const overlap = y => rects.reduce((a, r) => a + Math.max(0, Math.min(y + h, r.bottom + pad) - Math.max(y, r.top - pad)), 0);
+    let best = cands[rects.length ? 0 : 2]; if (rects.length) cands.forEach(c => { if (overlap(c[1]) < overlap(best[1]) - 1) best = c; });
+    b.style.top = Math.max(m, best[1]) + 'px'; b.dataset.pos = best[0];
+  }
+  function tutRender() {
+    tipHide(); const st = C.tutStep(P); if (!st) return tutHide();
+    if (st.inline) { tutHide(); return; }
+    const alt = st.id === 'story' && tutStory();
+    const els = st.target ? visibleEls(st.target) : []; const action = st.action && !alt && els.length;
+    TUT.els = els; TUT.action = action;
+    const steps = D.TUTORIAL.steps, n = steps.length, idx = stepIndex();
+    const text = alt ? st.altText : st.id === 'afterMatch' && TUT.lastWin && st.textWin ? st.textWin : st.text;
+    const nextLbl = st.last ? (P.tutorial.rewarded ? 'Finish' : `Finish (+${D.TUTORIAL.reward} 🪙)`) : 'Next ▶';
+    const o = tutEls(); const b = $('#tutBubble'); b.dataset.step = st.id;
+    b.innerHTML = halHead(esc(text), `${idx + 1} / ${n}`) + `<div class="bb">${action ? '<span class="hint">👆 Tap the glowing button</span>' : `<button class="btn green" id="tutNext">${nextLbl}</button>`}<button class="btn gray" id="tutSkip">Skip tutorial</button></div>`;
+    putHalAvatar(b);
+    document.querySelectorAll('.tut-lift').forEach(e => e.classList.remove('tut-lift')); if (action) els.forEach(e => e.classList.add('tut-lift'));
+    o.classList.add('show');
+    if (els.length) { const top = Math.min(...els.map(e => e.getBoundingClientRect().top)), bot = Math.max(...els.map(e => e.getBoundingClientRect().bottom));
+      if (top < 0 || bot > innerHeight) { if (bot - top < innerHeight - 220) window.scrollBy(0, (top + bot) / 2 - innerHeight / 2); else els[0].scrollIntoView({ block: 'center' }); } }
+    tutLayout();
+    const nx = $('#tutNext'); if (nx) nx.onclick = () => tutNext(alt);
+    $('#tutSkip').onclick = () => { C.tutSkip(P); persist(); tutHide(); toast('Tutorial skipped. Replay it anytime in ⚙️ Settings.'); };
+  }
+  function tutNext(alt) {
+    const st = C.tutStep(P); if (!st) return;
+    if (st.last) { const got = C.tutComplete(P); persist(); tutHide(); if (got) sfx('coin', { delay: 0.1 }); show(current);
+      modal(`<h2>🎓 Tour complete!</h2>` + dialog(hal().look, `Coach Hal: "${got ? `Here's ${got} coins to get you started. ` : ''}I'll pop in with a quick tip the first time you open a new screen. Go get 'em!"`), [{ label: "Let's bowl!", cls: 'green' }]); fillAvatars($('#modal')); return; }
+    if (alt && st.altSkipTo) C.tutGoto(P, st.altSkipTo); else C.tutAdvance(P);
+    persist(); const nx = C.tutStep(P);
+    if (nx && nx.screen !== current && nx.screen !== 'match') show(nx.screen); else tutRefresh();
+  }
+  // Called after every screen change and modal close: decides whether the tour bubble or a one-time tip should show.
+  function tutRefresh() {
+    if (!P || !P.tutorial) return;
+    const modalOpen = $('#modal').classList.contains('show');
+    if (C.tutActive(P)) {
+      let st = C.tutStep(P);
+      if (st && st.screen !== current && st.backTo && current === 'hub') { C.tutGoto(P, st.backTo); persist(); st = C.tutStep(P); }
+      if (!st || modalOpen || st.screen !== current) { tutHide(); tipHide(); return; }
+      return tutRender();
+    }
+    tutHide(); if (modalOpen) return tipHide();
+    if (C.tipDue(P, current)) showTip(current); else if (!($('#tipWrap') && $('#tipWrap').dataset.for === current)) tipHide();
+  }
+  function showTip(id) {
+    let w = $('#tipWrap'); if (!w) { w = document.createElement('div'); w.id = 'tipWrap'; w.className = 'tipwrap'; document.body.appendChild(w); }
+    w.dataset.for = id; w.innerHTML = `<div class="tut-bubble" id="tipBubble">${halHead(esc(D.TUTORIAL.tips[id]), '💡 Tip')}<div class="bb"><button class="btn green" id="tipOk">Got it!</button><button class="btn gray" id="tipOff">No more tips</button></div></div>`;
+    putHalAvatar(w); w.classList.add('show'); C.markTip(P, id); persist();
+    $('#tipOk').onclick = () => tipHide();
+    $('#tipOff').onclick = () => { C.setTips(P, false); persist(); tipHide(); toast('Tips off. Turn them back on in ⚙️ Settings.'); };
+  }
+  function modalTip(id) { if (!C.tipDue(P, id)) return ''; C.markTip(P, id); persist(); return `<div class="tutinline">${dialog(hal().look, `Coach Hal tip: "${esc(D.TUTORIAL.tips[id])}"`)}</div>`; }
+  // Action steps: tapping the glowing target advances the tour before the button's own handler runs.
+  document.addEventListener('click', e => {
+    if (!P || !TUT.action || !C.tutActive(P) || !$('#tut') || !$('#tut').classList.contains('show')) return;
+    const hit = (TUT.els || []).find(el => el.contains(e.target)); if (!hit) return;
+    TUT.action = false; tutHide(); C.tutAdvance(P); persist();
+  }, true);
+  window.addEventListener('resize', () => tutLayout()); window.addEventListener('scroll', () => tutLayout(), { passive: true });
+  function tutBootFix() {
+    if (!P) return;
+    if (P.tutorial.status === 'new') C.tutStart(P);
+    const st = C.tutStep(P); if (st && st.screen !== 'hub') C.tutGoto(P, st.id === 'afterMatch' ? 'daily' : 'story');
+  }
+  function offerTour() {
+    modal(`<h2>🎓 New: Coach Hal's tour</h2>` + dialog(hal().look, `Coach Hal: "Want a quick tour of everything in Pin Masters? It takes about a minute${P.tutorial.rewarded ? '' : ` and pays ${D.TUTORIAL.reward} coins`}."`),
+      [{ label: 'Take the tour', cls: 'green', id: 'tourYes', fn: () => { C.tutStart(P); persist(); show('hub'); } }, { label: 'No thanks', cls: 'gray', id: 'tourNo', fn: () => { C.tutDecline(P); persist(); toast('No problem! You can take it later in ⚙️ Settings.'); tutRefresh(); } }]);
+    fillAvatars($('#modal'));
+  }
+
   // ---------- Boot ----------
   function boot() {
     document.querySelectorAll('.screen:not(#create):not(#match)').forEach(s => { const b = document.createElement('button'); b.className = 'btn gray back'; b.textContent = '⬅ Home'; b.onclick = () => show('hub'); s.after(b); b.dataset.for = s.id; });
@@ -1642,9 +1819,10 @@ button,.btn,select{min-height:44px}
     document.querySelectorAll('.screen').forEach(s => obs.observe(s, { attributes: true, attributeFilter: ['class'] }));
     document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('button, .btn, select, canvas[style*="pointer"]'); if (!b || b.disabled) return; if (b.classList.contains('sndbtn')) show('settings'); sfx('click'); });
     P = C.load(); if (P && !P.version) P = null;
-    if (P) { C.unlockSkills(P); C.restorePurchases(P, localStorage); C.dailyCheck(P, now()); persist(); show('hub'); } else show('create');
+    if (P) { C.unlockSkills(P); C.restorePurchases(P, localStorage); C.dailyCheck(P, now()); tutBootFix(); persist(); show('hub'); if (C.tutShouldOffer(P)) offerTour(); } else show('create');
   }
-  window.StrikeQuest = window.PinMasters = { getPlayer: () => P, audio: AU, show, toast, laneDemo, preMatch, save: persist };
+  window.StrikeQuest = window.PinMasters = { getPlayer: () => P, audio: AU, show, toast, laneDemo, preMatch, save: persist, version: D.APP_VERSION,
+    tutorial: { step: () => (C.tutStep(P) || {}).id || null, state: () => P && P.tutorial, refresh: tutRefresh } };
   document.addEventListener('DOMContentLoaded', boot);
 })();
 </script>
