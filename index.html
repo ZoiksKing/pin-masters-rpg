@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.4.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.5.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -112,7 +112,61 @@ button,.btn,select{min-height:44px}
 <section class="screen" id="stats"></section><section class="screen" id="leaderboard"></section><section class="screen" id="skills"></section><section class="screen" id="daily"></section><section class="screen" id="club"></section><section class="screen" id="style"></section><section class="screen" id="guide"></section><section class="screen" id="settings"></section><section class="screen" id="match"></section>
 </div>
 <div class="modal" id="modal"><div class="card"><div id="modalBody"></div><div id="modalBtns"></div></div></div><div class="toast" id="toast"></div>
-<script>/* Pin Masters RPG - game data (data-driven so content can be swapped/licensed later).
+<script>/* Pin Masters RPG — ALL account keys live in this one file. See store/SETUP_KEYS.md.
+ * Everything here is safe to ship in an app (these are public client identifiers, not secrets).
+ * Empty values = that feature stays switched off and the game falls back to its offline/demo behaviour. */
+(function (root) {
+  root.PM_CONFIG = {
+    // 1) FIREBASE (online PvP + leaderboards). Paste the web app config from
+    //    Firebase console > Project settings > Your apps > Web app > "SDK setup and configuration" > Config.
+    //    While projectId/apiKey/appId are empty, PvP stays simulated and the leaderboard stays local.
+    firebase: {
+      apiKey: '',
+      authDomain: '',
+      projectId: '',
+      storageBucket: '',
+      messagingSenderId: '',
+      appId: ''
+    },
+    // Dev only: point at the Firebase Local Emulator Suite, e.g. { host: '127.0.0.1', firestorePort: 8085, authPort: 9099 }.
+    firebaseEmulator: null,
+
+    // 2) ADMOB (native Android/iOS app only; the website always shows the demo placeholders).
+    //    Defaults are Google's official TEST IDs, which only ever show "Test Ad" creatives.
+    //    Replace with your own IDs and set testing:false for the store release.
+    admob: {
+      enabled: true,
+      testing: true,
+      android: {
+        appId: 'ca-app-pub-3940256099942544~3347511713',          // ALSO goes in android/app/src/main/res/values/strings.xml (admob_app_id)
+        banner: 'ca-app-pub-3940256099942544/9214589741',         // adaptive banner (test)
+        interstitial: 'ca-app-pub-3940256099942544/1033173712',
+        rewarded: 'ca-app-pub-3940256099942544/5224354917'
+      },
+      ios: {
+        appId: 'ca-app-pub-3940256099942544~1458002511',          // ALSO goes in ios/App/App/Info.plist (GADApplicationIdentifier)
+        banner: 'ca-app-pub-3940256099942544/2435281174',         // adaptive banner (test)
+        interstitial: 'ca-app-pub-3940256099942544/4411468910',
+        rewarded: 'ca-app-pub-3940256099942544/1712485313'
+      }
+    },
+
+    // 3) REVENUECAT (real in-app purchases on Google Play + App Store; the website keeps the demo checkout).
+    //    Public SDK keys from RevenueCat > Project > API keys. While empty, purchases stay in DEMO mode.
+    revenuecat: {
+      androidApiKey: '',   // starts with goog_
+      iosApiKey: '',       // starts with appl_
+      entitlement: 'no_ads',
+      products: {
+        removeAds: 'remove_ads',                                   // non-consumable, $2.99
+        gems: { gems_s: 'gems_small', gems_m: 'gems_medium', gems_l: 'gems_large', gems_xl: 'gems_xl' } // consumables
+      }
+    }
+  };
+  // Test hook only (Playwright points the game at the local Firebase emulator). Unused in production.
+  if (root.__PM_CONFIG_PATCH) Object.assign(root.PM_CONFIG, root.__PM_CONFIG_PATCH);
+})(typeof self !== 'undefined' ? self : this);
+</script><script>/* Pin Masters RPG - game data (data-driven so content can be swapped/licensed later).
  * All brand, product and pro names are ORIGINAL and FICTIONAL. `swapTarget` notes the real-world
  * company/athlete each stand-in is loosely inspired by, for FUTURE LICENSING ONLY. Never show
  * swapTarget values in the shipped UI unless a license is signed. */
@@ -275,10 +329,10 @@ button,.btn,select{min-height:44px}
   ];
 
   const GEM_PACKS = [
-    { id: 'gems_s', gems: 80, usd: 0.99, label: 'Handful of Gems' },
-    { id: 'gems_m', gems: 450, usd: 4.99, label: 'Bag of Gems' },
-    { id: 'gems_l', gems: 1000, usd: 9.99, label: 'Bucket of Gems' },
-    { id: 'gems_xl', gems: 2800, usd: 24.99, label: 'Treasure Chest' }
+    { id: 'gems_s', sku: 'gems_small', gems: 80, usd: 0.99, label: 'Handful of Gems' },
+    { id: 'gems_m', sku: 'gems_medium', gems: 450, usd: 4.99, label: 'Bag of Gems' },
+    { id: 'gems_l', sku: 'gems_large', gems: 1000, usd: 9.99, label: 'Bucket of Gems' },
+    { id: 'gems_xl', sku: 'gems_xl', gems: 2800, usd: 24.99, label: 'Treasure Chest' }
   ];
   // Premium goods: cosmetics + convenience only. No exclusive stat power.
   // Convenience items for gems (non-cosmetic, no stat power).
@@ -368,13 +422,13 @@ button,.btn,select{min-height:44px}
     { name: 'Spare Me', emblem: '🙏', avg: 128 }, { name: 'Lucky Strikes', emblem: '🍀', avg: 150 }
   ];
   const AD_CONFIG = { interstitialEvery: 3, rewardedPerDay: 5, rewardedCoinBonus: 0.5, demo: true };
-  const REMOVE_ADS = { id: 'remove_ads', usd: 2.99, type: 'non-consumable', name: 'Remove Ads' };
+  const REMOVE_ADS = { id: 'remove_ads', sku: 'remove_ads', usd: 2.99, type: 'non-consumable', name: 'Remove Ads' };
 
   const RIVAL_FIRST = ['Ace', 'Bowlie', 'Pinny', 'Rolla', 'Sparky', 'Turbo', 'Lucky', 'Ziggy', 'Mango', 'Pixel', 'Nova', 'Echo', 'Comet', 'Waffles', 'Jinx'];
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.4.0';
+  const APP_VERSION = '0.5.0';
   const TUTORIAL = {
     reward: 100,
     steps: [
@@ -665,6 +719,7 @@ button,.btn,select{min-height:44px}
     p.club = p.club === undefined ? null : p.club;
     p.ads = p.ads || { sinceInterstitial: 0, rewardedDate: null, rewardedToday: 0, shown: 0 };
     p.entitlements = p.entitlements || { removeAds: false };
+    p.purchases = p.purchases || { tx: [] }; p.privacy = p.privacy || { ageGroup: null };
     p.seen = p.seen || {}; p.version = 2;
     // Saves from before v0.4 have no tutorial flag: never force the full tour on them; offer it once and turn on contextual tips.
     if (!p.tutorial) p.tutorial = { status: 'legacy', step: 0, tips: true, seen: {}, offered: false, rewarded: false };
@@ -741,7 +796,8 @@ button,.btn,select{min-height:44px}
     const pat = patternById(opts.patternId || alley.pattern);
     const ctx = { difficulty: alley.difficulty, pattern: pat, rng, gameIndex: opts.gameIndex || 0 };
     const temp = opts.useRosin ? { focus: 5 } : null;
-    const me = playerBowler(p, { fairPlay: opts.fairPlay, temp });
+    // p may be a save (normal play) or a ready-made bowler (online PvP: both sides come from uploaded bowler cards).
+    const me = p && p.isBowler ? p : playerBowler(p, { fairPlay: opts.fairPlay, temp });
     const them = op.isBowler || op.simulated ? op : opponentBowler(op);
     const a = simulateGame(me, ctx);
     let b = simulateGame(them, ctx), win;
@@ -780,7 +836,7 @@ button,.btn,select{min-height:44px}
         if (p.story.beaten >= ch.opponents.length) { storyMsg = 'Chapter cleared: ' + ch.title + '!'; p.coins += 250 * ch.id; p.story.chapter++; p.story.beaten = 0; if (ch.id === D.STORY.length) champion = true; }
       }
     }
-    if (mode === 'pvp' && opts.rival) { const E = 1 / (1 + Math.pow(10, (opts.rival.elo - p.pvp.rating) / 400)); p.pvp.rating = Math.round(p.pvp.rating + 32 * ((result.win ? 1 : 0) - E)); result.win ? p.pvp.wins++ : p.pvp.losses++; }
+    if (mode === 'pvp' && opts.rival) { p.pvp.rating = eloAfter(p.pvp.rating, opts.rival.elo, result.win); result.win ? p.pvp.wins++ : p.pvp.losses++; }
     const c = countEvents(result.player);
     if (opts.now) { dailyCheck(p, opts.now); recordDaily(p, 'games', 1); if (result.win) recordDaily(p, 'wins', 1); recordDaily(p, 'strikes', c.strikes); recordDaily(p, 'spares', c.spares); recordDaily(p, 'specials', c.specials); if (mode === 'pvp') recordDaily(p, 'pvp', 1); if (p.club) { clubCheck(p, opts.now); p.club.myPins += result.player.total; } }
     p.ads.sinceInterstitial++;
@@ -880,7 +936,33 @@ button,.btn,select{min-height:44px}
   function purchaseRemoveAds(p, storage) { p.entitlements.removeAds = true; if (storage) storage.setItem(ENTITLEMENT_KEY, JSON.stringify({ remove_ads: true })); return true; }
   function restorePurchases(p, storage) { try { const e = JSON.parse((storage && storage.getItem(ENTITLEMENT_KEY)) || '{}'); if (e.remove_ads) p.entitlements.removeAds = true; return !!e.remove_ads; } catch (x) { return false; } }
 
+  // Real-store consumables: grant a gem pack once per store transaction id (a retried callback never double-grants).
+  function grantGemPack(p, packId, txId) {
+    migrate(p); const g = D.GEM_PACKS.find(x => x.id === packId || x.sku === packId); if (!g) return 0;
+    if (txId && p.purchases.tx.includes(txId)) return 0; if (txId) { p.purchases.tx.push(txId); p.purchases.tx = p.purchases.tx.slice(-50); }
+    p.gems += g.gems; return g.gems;
+  }
+  // Neutral age screen: only the age GROUP is kept (never a birth date). child (<13) -> child-directed ads; everyone gets non-personalised ads.
+  function ageGroupOf(age) { age = +age; return !(age >= 0) ? null : age < 13 ? 'child' : age < 18 ? 'teen' : 'adult'; }
+  function setAgeGroup(p, age) { migrate(p); p.privacy.ageGroup = ageGroupOf(age); return p.privacy.ageGroup; }
+  function adTreatment(p) { const g = p && p.privacy && p.privacy.ageGroup; const kid = g !== 'teen' && g !== 'adult'; return { childDirected: kid, underAgeOfConsent: kid || g === 'teen', nonPersonalized: true, maxRating: 'G' }; }
+
   // ---------- PvP & leaderboard ----------
+  // Elo (K=32): a single match moves a rating by at most 32 (Firestore rules rely on this bound).
+  const ELO_K = 32;
+  function eloAfter(mine, theirs, win) { const E = 1 / (1 + Math.pow(10, (theirs - mine) / 400)); return Math.round(mine + ELO_K * ((win ? 1 : 0) - E)); }
+  // Online "bowler card": everything another player's device needs to replay a match against you (Fair Play gear cap applied).
+  const r2 = x => Math.round(x * 100) / 100;
+  function cardFromPlayer(p, name) {
+    migrate(p); const b = playerBowler(p, { fairPlay: true }); const st = {}; D.STATS.forEach(k => (st[k] = r2(b.stats[k])));
+    return { name: String(name || p.name).slice(0, 16), stats: st, ballId: b.ball.id, cond: r2(b.condition), spareBonus: r2(b.spareBonus || 0), altHook: b.altHook == null ? null : r2(b.altHook),
+      skills: (b.skills || []).slice(0, 3).map(s => ({ id: s.id, level: s.level })), cos: { outfit: p.cos.outfit || null, ball: p.cos.ball || null, celebration: p.cos.celebration || null }, rating: rating(baseStats(p)) };
+  }
+  function cardToBowler(card) {
+    const ball = ballById(card.ballId) || ballById('house_ball'); const st = {}; D.STATS.forEach(k => (st[k] = Math.max(0, +card.stats[k] || 0)));
+    return { isBowler: true, online: true, name: card.name, stats: st, ball, condition: card.cond == null ? 1 : card.cond, spareBonus: card.spareBonus || 0, altHook: card.altHook == null ? null : card.altHook,
+      skills: (card.skills || []).filter(s => D.SKILLS[s.id]).map(s => ({ id: s.id, level: s.level })), cos: card.cos || {} };
+  }
   function generateRivals(p, seed, n) {
     const rng = makeRng(seed); const base = baseStats(p); const out = [];
     const r = rating(base); const pool = Object.keys(D.PATTERNS).filter(k => r < 60 ? D.PATTERNS[k].kind === 'house' : D.PATTERNS[k].kind !== 'house');
@@ -911,7 +993,7 @@ button,.btn,select{min-height:44px}
     skillSlots, skillUpgradeCost, unlockSkills, upgradeSkill, toggleSkill, dateStr, dailyCheck, recordDaily, streakBonus, claimStreak, claimChallenge,
     weekKey, JOINABLE, createClub, joinClub, leaveClub, clubTable, clubCheck, leagueNight, cosById, buyCosmetic, equipCosmetic,
     shouldShowInterstitial, markInterstitialShown, bannerVisible, canWatchRewarded, grantRewarded, purchaseRemoveAds, restorePurchases,
-    generateRivals, leaderboard, tierOf, save, load, data: D,
+    generateRivals, leaderboard, tierOf, save, load, eloAfter, ELO_K, cardFromPlayer, cardToBowler, hashStr, grantGemPack, ageGroupOf, setAgeGroup, adTreatment, data: D,
     tutActive, tutStep, tutStart, tutGoto, tutAdvance, tutComplete, tutSkip, tutDecline, tutReplay, tutShouldOffer, tipsOn, tipDue, markTip, setTips };
 });
 </script><script>/* Pin Masters RPG audio: 100% original, procedurally synthesized Web Audio sound effects and music.
@@ -1327,6 +1409,321 @@ button,.btn,select{min-height:44px}
   }
   root.PinLane = Lane;
 })(typeof self !== 'undefined' ? self : this);
+</script><script>/* Pin Masters RPG online layer: Firebase anonymous auth + Firestore async PvP + online leaderboards.
+ * Pure logic + an injected Firebase modular SDK object (window.PMFirebase in the app, the Node SDK in tests).
+ * If src/app-config.js has no Firebase config, connect() returns null and the UI keeps the offline simulated PvP / local board. */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) module.exports = factory(require('./core.js'), require('./data.js'), null);
+  else root.PMOnline = factory(root.BRPG, root.BRPG_DATA, root);
+})(typeof self !== 'undefined' ? self : this, function (C, D, G) {
+  'use strict';
+  const START_ELO = 1000, MATCH_GAP_MS = 20000, WRITE_GAP_MS = 3500, TIMEOUT_MS = 10000;
+
+  // ---------- Kid-safe nicknames (no free chat exists anywhere in the game) ----------
+  const NICK_RE = /^[A-Za-z0-9_ ]{3,16}$/;
+  const LEET = { '0': 'o', '1': 'i', '2': 'z', '3': 'e', '4': 'a', '5': 's', '6': 'g', '7': 't', '8': 'b', '9': 'g', '@': 'a', '$': 's', '!': 'i', '|': 'i', '+': 't' };
+  const squash = s => String(s).toLowerCase().split('').map(c => LEET[c] || c).join('').replace(/[^a-z]/g, '').replace(/(.)\1+/g, '$1');
+  // Blocked anywhere inside the name (after leetspeak/spacing normalisation; repeats like "fuuuck" are also collapsed for long words).
+  const BAD_SUB = ['fuck', 'fuk', 'fck', 'phuk', 'shit', 'bitch', 'biatch', 'cunt', 'kunt', 'puss', 'slut', 'whore', 'porn', 'penis', 'vagina', 'boob', 'tits', 'nigg', 'niga', 'nigr', 'fag',
+    'retard', 'molest', 'nazi', 'hitler', 'kkk', 'jizz', 'semen', 'orgasm', 'horny', 'sexy', 'nude', 'naked', 'bastard', 'damn', 'douche', 'twat', 'prick', 'bollock', 'asshole', 'ashole',
+    'dildo', 'vibrator', 'testicle', 'scrotum', 'murder', 'suicide', 'cocaine', 'drunk', 'vodka', 'bomb', 'terror', 'wetback', 'tranny', 'lesbo', 'dyke', 'queer', 'poop', 'motherf', 'stfu', 'wtf'];
+  // Blocked as a whole word only (too short / appear inside innocent words like skill, torpedo, therapist, shore, canal).
+  const BAD_WORD = ['as', 'ass', 'arse', 'sex', 'hell', 'crap', 'piss', 'tit', 'hoe', 'ho', 'hore', 'nig', 'jap', 'gay', 'homo', 'fat', 'ugly', 'stupid', 'idiot', 'dumb', 'loser', 'fu', 'kys', 'milf', 'xxx',
+    'die', 'rape', 'raped', 'rapist', 'pedo', 'cum', 'anal', 'anus', 'cock', 'dick', 'kill', 'killer', 'killa', 'gun', 'guns', 'meth', 'drug', 'drugs', 'beer', 'weed', 'heroin', 'erect', 'wank',
+    'spic', 'gook', 'kike', 'chink', 'isis', 'butt', 'pee', 'poo', 'sht', 'mod'];
+  // No impersonating staff or the game's characters.
+  const RESERVED = ['admin', 'moderator', 'staff', 'official', 'pinmasters', 'pinmaster', 'support', 'developer', 'owner', 'brock', 'coachhal', 'pba'];
+  const deleet = s => String(s).toLowerCase().split('').map(c => LEET[c] || c).join('').replace(/[^a-z]/g, '');
+  function cleanNickname(raw) {
+    const v = String(raw == null ? '' : raw).replace(/\s+/g, ' ').trim();
+    if (!NICK_RE.test(v)) return { ok: false, reason: 'Use 3-16 letters, numbers, spaces or _' };
+    if ((v.match(/\d/g) || []).length > 4) return { ok: false, reason: 'Too many numbers (no phone numbers or ages, please)' };
+    const flat = deleet(v), sq = squash(v);
+    const words = [].concat(...v.toLowerCase().split(/[\s_]+/).filter(Boolean).map(w => [w, deleet(w), squash(w), w.replace(/\d+$/, '')]));
+    const hit = w => flat.includes(w) || (squash(w).length >= 4 && sq.includes(squash(w)));
+    if (BAD_SUB.some(hit) || words.some(w => BAD_WORD.includes(w)) || BAD_WORD.includes(flat) || BAD_WORD.includes(sq)) return { ok: false, reason: 'Please pick a friendlier name' };
+    if (RESERVED.some(hit)) return { ok: false, reason: 'That name is reserved' };
+    return { ok: true, value: v, key: v.toLowerCase().replace(/ /g, '_') };
+  }
+  // Preset-word name builder (adjective + noun + optional number). This is the ONLY way to pick an online name; no free text.
+  const ADJ = ['Lucky', 'Rapid', 'Mighty', 'Sunny', 'Cosmic', 'Turbo', 'Happy', 'Super', 'Golden', 'Brave', 'Jolly', 'Swift', 'Clever', 'Fuzzy', 'Zippy', 'Bouncy', 'Sparkly', 'Speedy', 'Silver', 'Neon',
+    'Rocket', 'Thunder', 'Crystal', 'Groovy', 'Shiny', 'Stormy', 'Electric', 'Epic', 'Chill', 'Bold', 'Cheery', 'Dizzy', 'Frosty', 'Wild', 'Mega', 'Ultra', 'Sneaky', 'Wacky', 'Comet', 'Lunar'];
+  const NOUN = ['Striker', 'Roller', 'Pinpal', 'Spinner', 'Hookshot', 'Bowler', 'Tenpin', 'Spare', 'Comet', 'Rocket', 'Panda', 'Tiger', 'Otter', 'Falcon', 'Dragon', 'Penguin', 'Koala', 'Fox', 'Wizard', 'Ninja',
+    'Pirate', 'Robot', 'Astro', 'Champ', 'Ace', 'Turkey', 'Lane', 'Pocket', 'Hero', 'Rhino', 'Dolphin', 'Llama', 'Unicorn', 'Yeti', 'Gecko', 'Badger', 'Meteor', 'Cyclone', 'Pinwheel', 'Bolt'];
+  function buildNickname(adj, noun, num) { if (!ADJ.includes(adj) || !NOUN.includes(noun) || adj === noun) return null; const n = num == null || num === '' ? '' : String(Math.max(0, Math.min(99, parseInt(num, 10) || 0))); const v = adj + noun + n; return v.length <= 16 && cleanNickname(v).ok ? v : null; }
+  function randomParts(rng) { rng = rng || Math.random; for (let i = 0; i < 50; i++) { const a = ADJ[Math.floor(rng() * ADJ.length)], b = NOUN[Math.floor(rng() * NOUN.length)], n = Math.floor(rng() * 100); if (buildNickname(a, b, n)) return { adj: a, noun: b, num: n }; } return { adj: 'Lucky', noun: 'Bowler', num: 7 }; }
+  function randomNickname(rng) { const r = randomParts(rng); return buildNickname(r.adj, r.noun, r.num); }
+
+  // ---------- Week / season keys (UTC) ----------
+  function weekKey(d) { const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const y = t.getUTCFullYear(); const wk = Math.ceil(((t - Date.UTC(y, 0, 1)) / 864e5 + 1) / 7); return y + '-W' + String(wk).padStart(2, '0'); }
+  const seasonKey = d => d.getUTCFullYear() + '-S' + (Math.floor(d.getUTCMonth() / 3) + 1);
+  const seasonName = k => { const [y, s] = k.split('-S'); return 'Season ' + s + ' · ' + y; };
+
+  // Local online state kept in the save (server copy is authoritative for elo/W-L/matchCount once signed in).
+  function ensure(p) { p.online = p.online || { nickname: null, nickKey: null, elo: START_ELO, wins: 0, losses: 0, matchCount: 0, weekKey: null, weekBest: 0, seasonKey: null, seasonBest: 0 }; return p.online; }
+  function trackScore(p, score, now) {
+    const o = ensure(p), wk = weekKey(now), sk = seasonKey(now); score = Math.max(0, Math.min(300, Math.round(score || 0)));
+    if (o.weekKey !== wk) { o.weekKey = wk; o.weekBest = 0; } if (o.seasonKey !== sk) { o.seasonKey = sk; o.seasonBest = 0; }
+    o.weekBest = Math.max(o.weekBest, score); o.seasonBest = Math.max(o.seasonBest, score); return o;
+  }
+  function patternFor(rating, seed) { const pool = Object.keys(D.PATTERNS).filter(k => rating < 60 ? D.PATTERNS[k].kind === 'house' : D.PATTERNS[k].kind !== 'house'); return pool[seed % pool.length]; }
+  const matchSeed = (a, b, n) => C.hashStr(a + '|' + b + '|' + n) || 1;
+  const withTimeout = (pr, ms, what) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error((what || 'request') + ' timed out')), ms || TIMEOUT_MS))]);
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------- Firestore service ----------
+  function createService(opts) {
+    const F = opts.sdk, cfg = opts.config, emu = opts.emulator, nowFn = opts.now || (() => new Date());
+    const S = { ready: false, uid: null, profile: null, isOnline: true };
+    let db = null, auth = null, lastWrite = 0, lastMatch = 0;
+    const userRef = uid => F.doc(db, 'users', uid || S.uid);
+    // All writes go through one queue so a background sync can never race a ranked-match upload (rules compare old vs new).
+    let q = Promise.resolve(); const serial = fn => { const r = q.then(fn, fn); q = r.catch(() => {}); return r; };
+    async function gap(ms, since) { const w = since + ms - Date.now(); if (w > 0) await sleep(w); }
+
+    S.init = async function () {
+      const app = F.initializeApp(cfg, opts.appName || 'pinmasters');
+      const browser = typeof indexedDB !== 'undefined' && F.initializeAuth && F.indexedDBLocalPersistence;
+      auth = browser ? F.initializeAuth(app, { persistence: [F.indexedDBLocalPersistence, F.browserLocalPersistence] }) : F.getAuth(app);
+      db = F.getFirestore(app);
+      if (emu) { F.connectAuthEmulator(auth, 'http://' + emu.host + ':' + emu.authPort, { disableWarnings: true }); F.connectFirestoreEmulator(db, emu.host, emu.firestorePort); }
+      const cred = await withTimeout(F.signInAnonymously(auth), TIMEOUT_MS, 'sign-in'); S.uid = cred.user.uid;
+      const snap = await withTimeout(F.getDoc(userRef()), TIMEOUT_MS, 'profile');
+      S.profile = snap.exists() ? snap.data() : null; S.ready = true; return S;
+    };
+    // Pull the server copy into the save (server wins for rating-critical fields).
+    S.adopt = function (p) { const o = ensure(p), pr = S.profile; if (!pr) return o; ['nickname', 'nickKey', 'elo', 'wins', 'losses', 'matchCount'].forEach(k => (o[k] = pr[k])); lastMatch = pr.lastMatchAt && pr.lastMatchAt.toMillis ? pr.lastMatchAt.toMillis() : lastMatch; return o; };
+    S.hasNickname = () => !!(S.profile && S.profile.nickname);
+
+    function userDoc(p, extra) {
+      const o = ensure(p), d = nowFn(); trackScore(p, 0, d);
+      const card = C.cardFromPlayer(p, (extra && extra.nickname) || o.nickname);
+      return Object.assign({ uid: S.uid, nickname: o.nickname, nickKey: o.nickKey, card, rating: card.rating, elo: o.elo, wins: o.wins, losses: o.losses, matchCount: o.matchCount,
+        best: Math.min(300, p.best || 0), weekKey: o.weekKey, weekBest: o.weekBest, seasonKey: o.seasonKey, seasonBest: o.seasonBest, v: D.APP_VERSION, updatedAt: F.serverTimestamp() }, extra || {});
+    }
+
+    // Pick (or change) the public nickname. Reserves nicknames/{key} so names are unique (case-insensitive).
+    S.claimNickname = (p, raw) => serial(() => _claimNickname(p, raw));
+    const _claimNickname = async function (p, raw) {
+      const c = cleanNickname(raw); if (!c.ok) return c; const o = ensure(p);
+      await gap(WRITE_GAP_MS, lastWrite);
+      try {
+        await withTimeout(F.runTransaction(db, async tx => {
+          const nref = F.doc(db, 'nicknames', c.key), uref = userRef();
+          const [ns, us] = [await tx.get(nref), await tx.get(uref)];
+          if (ns.exists() && ns.data().uid !== S.uid) throw new Error('TAKEN');
+          const old = us.exists() ? us.data().nickKey : null;
+          if (!ns.exists()) tx.set(nref, { uid: S.uid, createdAt: F.serverTimestamp() });
+          if (old && old !== c.key) tx.delete(F.doc(db, 'nicknames', old));
+          if (us.exists()) { const u = us.data(); o.elo = u.elo; o.wins = u.wins; o.losses = u.losses; o.matchCount = u.matchCount; o.nickname = c.value; o.nickKey = c.key; tx.set(uref, userDoc(p, { nickname: c.value, nickKey: c.key, createdAt: u.createdAt, lastMatchAt: u.lastMatchAt || null })); }
+          else { Object.assign(o, { elo: START_ELO, wins: 0, losses: 0, matchCount: 0, nickname: c.value, nickKey: c.key }); tx.set(uref, userDoc(p, { nickname: c.value, nickKey: c.key, createdAt: F.serverTimestamp(), lastMatchAt: null })); }
+        }), TIMEOUT_MS, 'nickname');
+      } catch (e) { if (/TAKEN/.test(e.message)) return { ok: false, reason: 'That name is taken - try another' }; throw e; }
+      lastWrite = Date.now(); const s = await F.getDoc(userRef()); S.profile = s.data(); return { ok: true, value: c.value };
+    };
+
+    // Upload the latest bowler card + best scores (throttled; call after any match / level up).
+    S.sync = (p) => serial(() => _sync(p));
+    const _sync = async function (p) {
+      if (!S.hasNickname()) return false; await gap(WRITE_GAP_MS, lastWrite);
+      const pr = S.profile; const d = userDoc(p, { createdAt: pr.createdAt, lastMatchAt: pr.lastMatchAt || null });
+      await withTimeout(F.setDoc(userRef(), d), TIMEOUT_MS, 'sync'); lastWrite = Date.now(); S.profile = (await F.getDoc(userRef())).data(); return true;
+    };
+
+    // Matchmaking: real players nearest your Elo; the rest is filled with clearly-labelled AI practice rivals (unranked).
+    S.findOpponents = async function (p, n) {
+      n = n || 3; const o = ensure(p), users = F.collection(db, 'users'), my = o.elo;
+      const [up, down] = await withTimeout(Promise.all([
+        F.getDocs(F.query(users, F.where('elo', '>=', my), F.orderBy('elo'), F.limit(10))),
+        F.getDocs(F.query(users, F.where('elo', '<', my), F.orderBy('elo', 'desc'), F.limit(10)))]), TIMEOUT_MS, 'matchmaking');
+      const seen = {}, real = [];
+      [...up.docs, ...down.docs].forEach(s => { const u = s.data(); if (s.id === S.uid || seen[s.id] || !u.nickname || !u.card) return; seen[s.id] = 1; real.push(u); });
+      real.sort((a, b) => Math.abs(a.elo - my) - Math.abs(b.elo - my));
+      const out = real.slice(0, n).map(u => { const seed = matchSeed(S.uid, u.uid, o.matchCount + 1);
+        return { name: u.nickname, uid: u.uid, online: true, elo: u.elo, stats: u.card.stats, card: u.card, cos: u.card.cos, rating: u.rating, record: u.wins + '-' + u.losses, pattern: patternFor(u.rating, seed), seed }; });
+      if (out.length < n) C.generateRivals(p, (Date.now() / 60000) | 0, n - out.length).forEach(r => out.push(Object.assign(r, { filler: true, name: r.name })));
+      return out;
+    };
+    // Both sides are replayed from bowler cards with a seed derived from both player ids + match number,
+    // so anyone (e.g. the optional Cloud Function) can re-run core.playMatch and get the identical result.
+    S.prepareMatch = function (p, opp) {
+      const o = ensure(p), myCard = C.cardFromPlayer(p, o.nickname);
+      return { me: C.cardToBowler(myCard), op: C.cardToBowler(opp.card), seed: matchSeed(S.uid, opp.uid, o.matchCount + 1), patternId: opp.pattern, myCard, matchNo: o.matchCount + 1 };
+    };
+    S.canPlayRanked = () => Date.now() - lastMatch >= MATCH_GAP_MS;
+    S.waitMs = () => Math.max(0, MATCH_GAP_MS - (Date.now() - lastMatch));
+    // Record a finished ranked match: match log + your new Elo/W-L in one atomic batch (rules check the pair).
+    S.reportMatch = (p, opp, prep, res, alleyId) => serial(() => _reportMatch(p, opp, prep, res, alleyId));
+    const _reportMatch = async function (p, opp, prep, res, alleyId) {
+      const o = ensure(p); await gap(WRITE_GAP_MS, lastWrite); await gap(MATCH_GAP_MS, lastMatch);
+      const before = o.elo, after = C.eloAfter(before, opp.elo, res.win), n = o.matchCount + 1, id = S.uid + '_' + n;
+      const newO = Object.assign({}, o, { elo: after, wins: o.wins + (res.win ? 1 : 0), losses: o.losses + (res.win ? 0 : 1), matchCount: n });
+      const b = F.writeBatch(db), pr = S.profile;
+      b.set(F.doc(db, 'matches', id), { a: S.uid, b: opp.uid, n, seed: prep.seed, alley: alleyId, pattern: prep.patternId, aScore: res.player.total, bScore: res.opponent.total, win: !!res.win,
+        eloBefore: before, eloAfter: after, bElo: opp.elo, aCard: prep.myCard, bCard: opp.card, v: D.APP_VERSION, createdAt: F.serverTimestamp() });
+      const saved = Object.assign({}, o); Object.assign(o, newO);
+      // The profile written with the match carries the exact card that was played (the rules compare them); post-match level-ups go up with the next sync.
+      b.set(userRef(), userDoc(p, { createdAt: pr.createdAt, lastMatchAt: F.serverTimestamp(), card: prep.myCard, rating: prep.myCard.rating }));
+      try { await withTimeout(b.commit(), TIMEOUT_MS, 'match upload'); } catch (e) { Object.assign(o, saved); throw e; }
+      lastWrite = lastMatch = Date.now(); S.profile = (await F.getDoc(userRef())).data(); p.pvp.wins = Math.max(p.pvp.wins, 0);
+      return { before, after, delta: after - before, matchId: id };
+    };
+
+    // Leaderboards: top 100 + your rank. kind: rating | pvp | week | season
+    const BOARDS = { rating: { field: 'rating', label: 'Rating' }, pvp: { field: 'elo', label: 'PvP Elo' }, week: { field: 'weekBest', key: 'weekKey', label: 'Best game' }, season: { field: 'seasonBest', key: 'seasonKey', label: 'Best game' } };
+    S.leaderboard = async function (kind, p, top) {
+      const B = BOARDS[kind] || BOARDS.rating, users = F.collection(db, 'users'), d = nowFn(), kv = B.key === 'weekKey' ? weekKey(d) : B.key === 'seasonKey' ? seasonKey(d) : null;
+      const filt = kv ? [F.where(B.key, '==', kv)] : [];
+      const snap = await withTimeout(F.getDocs(F.query(users, ...filt, F.orderBy(B.field, 'desc'), F.limit(Math.min(100, top || 100)))), TIMEOUT_MS, 'leaderboard');
+      const rows = snap.docs.map((s, i) => { const u = s.data(); return { rank: i + 1, name: u.nickname, value: u[B.field], rating: u.rating, elo: u.elo, tier: C.tierOf(u.rating), you: s.id === S.uid }; });
+      let me = rows.find(r => r.you) || null;
+      if (!me && S.profile && S.profile.nickname) {
+        const pr = S.profile, val = kv && pr[B.key] !== kv ? null : pr[B.field];
+        if (val != null) { const c = await withTimeout(F.getCountFromServer(F.query(users, ...filt, F.where(B.field, '>', val))), TIMEOUT_MS, 'rank'); me = { rank: c.data().count + 1, name: pr.nickname, value: val, you: true, tier: C.tierOf(pr.rating) }; }
+      }
+      return { kind, label: B.label, period: kind === 'week' ? 'Week ' + kv.split('-W')[1] : kind === 'season' ? seasonName(kv) : 'All-time', rows, me };
+    };
+    // "Delete my online data": removes your profile, nickname reservation, ranked match logs and the anonymous account itself.
+    S.deleteOnlineData = (p) => serial(() => _deleteOnlineData(p));
+    const _deleteOnlineData = async function (p) {
+      const pr = S.profile, b = F.writeBatch(db);
+      const ms = await withTimeout(F.getDocs(F.query(F.collection(db, 'matches'), F.where('a', '==', S.uid), F.limit(100))), TIMEOUT_MS, 'match list');
+      ms.docs.forEach(d => b.delete(d.ref));
+      if (pr && pr.nickKey) b.delete(F.doc(db, 'nicknames', pr.nickKey));
+      b.delete(userRef()); await withTimeout(b.commit(), TIMEOUT_MS, 'delete');
+      if (ms.size === 100) { let more; do { more = await F.getDocs(F.query(F.collection(db, 'matches'), F.where('a', '==', S.uid), F.limit(100))); const b2 = F.writeBatch(db); more.docs.forEach(d => b2.delete(d.ref)); if (more.size) await b2.commit(); } while (more.size === 100); }
+      const uid = S.uid; try { if (F.deleteUser && auth.currentUser) await F.deleteUser(auth.currentUser); } catch (e) { /* account removal is best effort; data is already gone */ }
+      if (p) delete p.online; S.profile = null; S.ready = false; S.uid = null; svcReset(); return { ok: true, uid };
+    };
+    S._db = () => db; S._auth = () => auth;
+    return S;
+  }
+
+  // ---------- Browser glue: lazy-load the bundled SDK only when a config exists ----------
+  const configured = cfg => !!(cfg && cfg.firebase && cfg.firebase.apiKey && cfg.firebase.projectId && cfg.firebase.appId);
+  let svc = null, starting = null, lastError = null;
+  function svcReset() { svc = null; starting = null; }
+  function loadScript(src) { return new Promise((res, rej) => { const s = G.document.createElement('script'); s.src = src; s.async = true; s.onload = res; s.onerror = () => rej(new Error('could not load ' + src)); G.document.head.appendChild(s); }); }
+  function connect() {
+    if (svc) return Promise.resolve(svc); if (starting) return starting;
+    const cfg = G && G.PM_CONFIG; if (!configured(cfg)) return Promise.resolve(null);
+    starting = (async () => {
+      if (!G.PMFirebase) await loadScript('vendor/firebase.js');
+      const s = createService({ sdk: G.PMFirebase, config: cfg.firebase, emulator: cfg.firebaseEmulator }); await s.init(); svc = s; lastError = null; return s;
+    })().catch(e => { console.warn('[online] offline fallback:', e && e.message); lastError = e; starting = null; return null; });
+    return starting;
+  }
+  return { START_ELO, MATCH_GAP_MS, cleanNickname, randomNickname, buildNickname, randomParts, NAME_WORDS: { ADJ, NOUN }, squash, deleet, weekKey, seasonKey, trackScore, ensure, patternFor, matchSeed, createService, configured,
+    enabled: () => configured(G && G.PM_CONFIG), connect, service: () => svc, lastError: () => lastError };
+});
+</script><script>/* Pin Masters RPG native monetisation: Google AdMob ads + RevenueCat in-app purchases.
+ * Only active inside the Capacitor Android/iOS app (vendor/native.js is lazy-loaded there). On the web, everything
+ * stays in DEMO mode (placeholder ads, demo checkout), exactly like v0.4.
+ * Family settings: G-rated ads only, non-personalised ads (npa) for everyone, child-directed + under-age-of-consent
+ * treatment for players who said they are under 13 on the neutral age screen (or whose age is unknown). */
+(function (root) {
+  'use strict';
+  const cfg = () => root.PM_CONFIG || {};
+  const hasBridge = () => !!(root.Capacitor && (typeof root.Capacitor.isNativePlatform === 'function' ? root.Capacitor.isNativePlatform() : (root.androidBridge || (root.webkit && root.webkit.messageHandlers && root.webkit.messageHandlers.bridge))));
+  const M = { native: false, ads: { live: false, consent: null, privacyOptions: false, error: null }, store: { live: false, products: {}, prices: {}, error: null }, ageGroup: null };
+  let N = null, intReady = false, rewReady = false, bannerOn = false, bannerShown = false, busy = false;
+  const platform = () => (N && N.Capacitor.getPlatform()) || 'web';
+  const loadScript = src => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('could not load ' + src)); document.head.appendChild(s); });
+  const warn = (w, e) => { try { console.warn('[monetize] ' + w, e && (e.message || e)); } catch (x) {} };
+  const child = () => M.ageGroup !== 'teen' && M.ageGroup !== 'adult'; // unknown age is treated as a child
+
+  // ---------------- Ads ----------------
+  const adOpts = id => ({ adId: id, isTesting: !!cfg().admob.testing, npa: true });
+  async function initAds() {
+    const a = cfg().admob; if (!a || !a.enabled) return; const ids = a[platform()]; if (!ids || !ids.banner) return;
+    const A = N.AdMob;
+    // Google UMP consent (EU/UK/US-state privacy messages). Kids are flagged under age of consent, so no personalised ads are ever requested.
+    try {
+      let info = await A.requestConsentInfo({ tagForUnderAgeOfConsent: child() || M.ageGroup === 'teen' });
+      if (info.isConsentFormAvailable && info.status === N.AdmobConsentStatus.REQUIRED) info = await A.showConsentForm();
+      M.ads.consent = info.status; M.ads.privacyOptions = info.privacyOptionsRequirementStatus === 'REQUIRED';
+      if (info.canRequestAds === false) { M.ads.error = 'consent'; return; }
+    } catch (e) { warn('consent', e); }
+    await A.initialize({ initializeForTesting: !!a.testing, testingDevices: a.testDevices || [], tagForChildDirectedTreatment: child(), tagForUnderAgeOfConsent: child() || M.ageGroup === 'teen', maxAdContentRating: N.MaxAdContentRating.General });
+    M.ads.ids = ids; M.ads.live = true;
+    A.addListener(N.InterstitialAdPluginEvents.Dismissed, () => { intReady = false; prepInt(); });
+    A.addListener(N.RewardAdPluginEvents.Dismissed, () => { rewReady = false; });
+    prepInt(); prepRew();
+  }
+  function prepInt() { if (!M.ads.live || intReady) return; N.AdMob.prepareInterstitial(adOpts(M.ads.ids.interstitial)).then(() => (intReady = true)).catch(e => warn('interstitial load', e)); }
+  function prepRew() { if (!M.ads.live || rewReady) return; N.AdMob.prepareRewardVideoAd(adOpts(M.ads.ids.rewarded)).then(() => (rewReady = true)).catch(e => warn('rewarded load', e)); }
+  // Banner follows the game's own rules (core.bannerVisible): never in a match, never with Remove Ads.
+  M.banner = function (show) {
+    if (!M.ads.live || show === bannerOn) return; bannerOn = show; document.documentElement.classList.toggle('native-banner', show);
+    const A = N.AdMob;
+    if (show) (bannerShown ? A.resumeBanner() : A.showBanner(Object.assign(adOpts(M.ads.ids.banner), { adSize: N.BannerAdSize.ADAPTIVE_BANNER, position: N.BannerAdPosition.BOTTOM_CENTER, margin: 0 })).then(() => (bannerShown = true))).catch(e => warn('banner', e));
+    else if (bannerShown) A.hideBanner().catch(e => warn('banner hide', e));
+  };
+  M.removeBanner = function () { bannerOn = false; document.documentElement.classList.remove('native-banner'); if (M.ads.live && bannerShown) { bannerShown = false; N.AdMob.removeBanner().catch(() => {}); } };
+  // Resolves true once the interstitial was shown and closed; false if none was ready (game just continues).
+  M.interstitial = async function () {
+    if (!M.ads.live || busy) return false; if (!intReady) { prepInt(); return false; }
+    busy = true;
+    try { const done = new Promise(r => { const h = N.AdMob.addListener(N.InterstitialAdPluginEvents.Dismissed, () => { r(); h.then(x => x.remove()); }); setTimeout(r, 90000); }); await N.AdMob.showInterstitial(); intReady = false; await done; return true; }
+    catch (e) { warn('interstitial show', e); return false; } finally { busy = false; prepInt(); }
+  };
+  M.rewardedReady = () => M.ads.live && rewReady;
+  // Resolves true only if Google reports the reward was earned.
+  M.rewarded = async function () {
+    if (!M.ads.live || busy) return false; if (!rewReady) { prepRew(); return false; }
+    busy = true; let earned = false;
+    try {
+      const hs = [N.AdMob.addListener(N.RewardAdPluginEvents.Rewarded, () => (earned = true))];
+      const done = new Promise(r => { hs.push(N.AdMob.addListener(N.RewardAdPluginEvents.Dismissed, r)); setTimeout(r, 120000); });
+      const item = await N.AdMob.showRewardVideoAd(); if (item && item.amount != null) earned = true; rewReady = false;
+      await done; hs.forEach(h => h.then(x => x.remove())); return earned;
+    } catch (e) { warn('rewarded show', e); return false; } finally { busy = false; rewReady = false; prepRew(); }
+  };
+  M.showPrivacyOptions = () => (M.ads.live ? N.AdMob.showPrivacyOptionsForm() : Promise.resolve());
+
+  // ---------------- In-app purchases (RevenueCat) ----------------
+  const rc = () => cfg().revenuecat || {};
+  const rcKey = () => (platform() === 'ios' ? rc().iosApiKey : rc().androidApiKey) || '';
+  const ownsRemoveAds = ci => !!(ci && ((ci.entitlements && ci.entitlements.active && ci.entitlements.active[rc().entitlement]) || (ci.allPurchasedProductIdentifiers || []).includes(rc().products.removeAds)));
+  async function initStore(hooks) {
+    if (!rcKey()) return; const P = N.Purchases;
+    await P.configure({ apiKey: rcKey() }); M.store.live = true;
+    const ids = [rc().products.removeAds, ...Object.values(rc().products.gems || {})];
+    try { const { products } = await P.getProducts({ productIdentifiers: ids, type: N.PRODUCT_CATEGORY.NON_SUBSCRIPTION }); products.forEach(p => { M.store.products[p.identifier] = p; M.store.prices[p.identifier] = p.priceString; }); }
+    catch (e) { warn('products', e); }
+    // Entitlement check on every launch (also picks up purchases made on another device with the same store account after Restore).
+    try { const { customerInfo } = await P.getCustomerInfo(); if (ownsRemoveAds(customerInfo)) hooks.onRemoveAds && hooks.onRemoveAds(true); } catch (e) { warn('customerInfo', e); }
+  }
+  const cancelled = e => e && (e.userCancelled || String(e.code) === String(N.PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR));
+  // sku: the store product id (e.g. 'remove_ads', 'gems_small'). Resolves { ok, cancelled, msg, removeAds, txId }.
+  M.buy = async function (sku) {
+    if (!M.store.live) return { ok: false, msg: 'Store not set up' };
+    const product = M.store.products[sku]; if (!product) return { ok: false, msg: 'This item is not available in the store yet. Please try again later.' };
+    try {
+      const r = await N.Purchases.purchaseStoreProduct({ product });
+      return { ok: true, removeAds: ownsRemoveAds(r.customerInfo), txId: (r.transaction && r.transaction.transactionIdentifier) || null, sku };
+    } catch (e) { return cancelled(e) ? { ok: false, cancelled: true } : { ok: false, msg: (e && e.message) || 'Purchase failed' }; }
+  };
+  M.restore = async function () {
+    if (!M.store.live) return { ok: false, msg: 'Store not set up' };
+    try { const { customerInfo } = await N.Purchases.restorePurchases(); return { ok: true, removeAds: ownsRemoveAds(customerInfo) }; }
+    catch (e) { return { ok: false, msg: (e && e.message) || 'Restore failed' }; }
+  };
+  M.price = (sku, fallbackUsd) => M.store.prices[sku] || '$' + Number(fallbackUsd).toFixed(2);
+
+  // hooks: { ageGroup: 'child'|'teen'|'adult'|null, adsAllowed: bool (false with Remove Ads), onRemoveAds(bool) }
+  M.init = async function (hooks) {
+    hooks = hooks || {}; M.ageGroup = hooks.ageGroup || null;
+    if (!hasBridge()) return M;
+    M.native = true;
+    try { if (!root.PMNative) await loadScript('vendor/native.js'); N = root.PMNative; } catch (e) { warn('native bundle', e); M.native = false; return M; }
+    if (!document.getElementById('pmNativeCss')) { const st = document.createElement('style'); st.id = 'pmNativeCss'; st.textContent = 'html.native-banner body{padding-bottom:calc(60px + env(safe-area-inset-bottom))}html.native-banner .adbanner{display:none!important}'; document.head.appendChild(st); }
+    await initStore(hooks).catch(e => { M.store.error = e; warn('store', e); });
+    if (hooks.adsAllowed !== false) await initAds().catch(e => { M.ads.error = e; warn('ads', e); });
+    return M;
+  };
+  root.PMMonetize = M;
+})(typeof self !== 'undefined' ? self : this);
 </script><script>/* Pin Masters RPG UI: DOM menus + PinLane canvas renderer. Depends on BRPG (core), BRPG_DATA, PinLane. */
 (function () {
   'use strict';
@@ -1339,11 +1736,15 @@ button,.btn,select{min-height:44px}
   const fast = () => !!window.__fast;
   const NOAU = () => {}; const AU = window.PMAudio || { play: NOAU, music: NOAU, stinger: NOAU, duck: NOAU, set: () => ({}), settings: () => ({ sfx: true, music: true, sfxVol: 0.8, musicVol: 0.5 }), state: () => ({ supported: false }) };
   const sfx = (n, o) => AU.play(n, o);
+  // v0.5 online + store hooks. ON = Firebase online layer (null service = offline/simulated), MON = native AdMob/RevenueCat (web = demo).
+  const ON = window.PMOnline || null, MON = window.PMMonetize || null; let online = null;
+  const onlineOn = () => !!(ON && ON.enabled());
+  const adsLive = () => !!(MON && MON.ads.live), storeLive = () => !!(MON && MON.store.live);
 
   // ---------- helpers ----------
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
   const RENDER = {};
-  function show(id) { current = id; if (id !== 'match') AU.music('menu'); if (RENDER[id]) RENDER[id](); document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id)); window.scrollTo(0, 0); tutRefresh(); }
+  function show(id) { current = id; if (id !== 'match') AU.music('menu'); if (RENDER[id]) RENDER[id](); if (P && adsLive()) MON.banner(C.bannerVisible(P, id)); document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id)); window.scrollTo(0, 0); tutRefresh(); }
   function modal(html, buttons) {
     const m = $('#modal'); $('#modalBody').innerHTML = html; const bb = $('#modalBtns'); bb.innerHTML = '';
     (buttons || [{ label: 'OK' }]).forEach(b => { const e = document.createElement('button'); e.className = 'btn ' + (b.cls || ''); e.textContent = b.label; e.style.marginTop = '8px'; if (b.id) e.id = b.id; if (b.disabled) e.disabled = true; e.onclick = () => { if (!b.keep) m.classList.remove('show'); b.fn && b.fn(); if (!b.keep) tutRefresh(); }; bb.appendChild(e); });
@@ -1398,16 +1799,59 @@ button,.btn,select{min-height:44px}
   }
   function scorecard(a, b, cur) { return `<table class="scorecard"><tr><td class="n"></td>${[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => `<td style="height:16px;font-size:10px;color:#7c3aed${n === 10 ? ';width:13%' : ''}">${n}</td>`).join('')}<td class="tot" style="font-size:10px">TOT</td></tr>${scoreRow(a.name, a.rolls, cur)}${scoreRow(b.name, b.rolls, cur)}</table>`; }
 
+  // ---------- Neutral age screen (sets ad treatment; only the age group is stored) ----------
+  function ageSelect() { return `<label class="muted" for="ageIn" style="display:block;margin-top:8px"><b>How old are you?</b></label><select id="ageIn" style="width:100%;font-size:17px;padding:8px;border-radius:10px;margin-top:4px"><option value="">Choose your age</option>${Array.from({ length: 14 }, (_, i) => i + 4).map(a => `<option value="${a}">${a}</option>`).join('')}<option value="18">18 or older</option></select>`; }
+  function askAge(then) {
+    modal(`<h2>🎂 Quick question</h2><p>How old are you? This helps us keep ads right for you. We only keep your age group, never your birthday.</p>${ageSelect()}`,
+      [{ label: 'Continue', cls: 'green', id: 'ageOk', keep: true, fn: () => { const v = $('#ageIn').value; if (v === '') return toast('Please choose your age'); C.setAgeGroup(P, v); persist(); closeModal(); then && then(); } }]);
+  }
+  // ---------- Online + native store services ----------
+  function bootServices() {
+    if (!P) return;
+    if (MON && !MON._started) { MON._started = true; MON.init({ ageGroup: P.privacy && P.privacy.ageGroup, adsAllowed: !P.entitlements.removeAds,
+      onRemoveAds: v => { if (v && P) { P.entitlements.removeAds = true; persist(); MON.removeBanner(); if (RENDER[current] && current !== 'match') RENDER[current](); } } })
+      .then(() => { if (P && adsLive()) MON.banner(C.bannerVisible(P, current)); if (current === 'style') RENDER.style(); }); }
+    connectOnline();
+  }
+  function connectOnline() {
+    if (!onlineOn()) return Promise.resolve(null);
+    return ON.connect().then(s => { const fresh = s && s !== online; online = s; if (fresh && P) { s.adopt(P); persist(); if (s.hasNickname()) s.sync(P).catch(e => console.warn('[online] sync', e.message)); } return s; });
+  }
+  function onlineAfterMatch(cfg, res) {
+    if (!ON || !P) return; ON.trackScore(P, res.player.total, now()); persist();
+    if (!online || !online.hasNickname()) return;
+    if (cfg.online) online.reportMatch(P, cfg.opp, cfg.prep, res, cfg.alley).then(r => { persist(); toast(`Online Elo ${r.after} (${r.delta >= 0 ? '+' : ''}${r.delta})`); if (current === 'pvp') RENDER.pvp(); })
+      .catch(e => { console.warn('[online] report', e.message); toast('Could not save the online result. Check your connection.'); });
+    else online.sync(P).catch(e => console.warn('[online] sync', e.message));
+  }
+  // Online name = preset words only (no free text anywhere).
+  function nameBuilder(onDone) {
+    const W = ON.NAME_WORDS, cur = ON.randomParts(); const opt = (arr, v) => arr.map(x => `<option ${x === v ? 'selected' : ''}>${x}</option>`).join('');
+    modal(`<h2>🏷️ Your online name</h2><p class="muted">Pick words to build your name. Other players only see this name, your stats and your scores.</p>
+      <div class="row" style="gap:6px"><select id="nbA" class="grow">${opt(W.ADJ, cur.adj)}</select><select id="nbN" class="grow">${opt(W.NOUN, cur.noun)}</select><select id="nbD"><option value="">-</option>${Array.from({ length: 100 }, (_, i) => `<option ${i === cur.num ? 'selected' : ''}>${i}</option>`).join('')}</select></div>
+      <p style="text-align:center;font-size:20px;margin:10px 0"><b id="nbOut"></b></p>`,
+      [{ label: '🎲 Random', cls: 'blue', id: 'nbRand', keep: true, fn: () => { const r = ON.randomParts(); $('#nbA').value = r.adj; $('#nbN').value = r.noun; $('#nbD').value = String(r.num); upd(); } },
+       { label: 'Save name', cls: 'green', id: 'nbSave', keep: true, fn: async () => { const v = ON.buildNickname($('#nbA').value, $('#nbN').value, $('#nbD').value); if (!v) return toast('That combo is too long - try other words');
+          const b = $('#nbSave'); b.disabled = true; b.textContent = 'Saving...';
+          try { const r = await online.claimNickname(P, v); if (!r.ok) { toast(r.reason); b.disabled = false; b.textContent = 'Save name'; return; } persist(); closeModal(); toast('You are ' + r.value + '!'); onDone && onDone(); }
+          catch (e) { toast('Could not reach the server. Try again.'); b.disabled = false; b.textContent = 'Save name'; } } },
+       { label: 'Cancel', cls: 'gray' }]);
+    const upd = () => { const v = ON.buildNickname($('#nbA').value, $('#nbN').value, $('#nbD').value); $('#nbOut').textContent = v || '(too long)'; };
+    ['nbA', 'nbN', 'nbD'].forEach(i => ($('#' + i).onchange = upd)); upd();
+  }
+
   // ---------- Create / Hub ----------
   RENDER.create = () => {
     $('#create').innerHTML = `<h1>🎳 Pin Masters<br><span style="font-size:22px">RPG</span></h1>
       <div class="card"><h2>Create your bowler</h2><input id="nameIn" type="text" maxlength="16" placeholder="Your bowler name" value="">
       <p class="muted">Use a nickname, not your real name. Everything saves on this device.</p><div class="row" id="lookRow"></div>
+      ${ageSelect()}
       <button class="btn green" id="startBtn" style="margin-top:10px">Start my bowling career!</button></div>
       <div class="card muted">Bowling is auto-played: your stats, gear, special shots and the oil pattern decide every roll. Train, win, level up with no stat cap, and climb from Local Rookie to PBA Champion.</div>`;
     const looks = [0, 1, 2, 3].map(i => lookFor('look' + i * 7)); let sel = 0; const lr = $('#lookRow');
     looks.forEach((lk, i) => { const c = avatar(lk, 56); c.style.borderRadius = '50%'; c.style.cursor = 'pointer'; c.style.background = i === sel ? '#ddd6fe' : '#fff'; c.onclick = () => { sel = i; [...lr.children].forEach((x, j) => (x.style.background = j === sel ? '#ddd6fe' : '#fff')); }; lr.appendChild(c); });
-    $('#startBtn').onclick = () => { const n = $('#nameIn').value.trim() || 'Rookie'; P = C.newPlayer(n); P.look = looks[sel]; C.dailyCheck(P, now()); persist();
+    $('#startBtn').onclick = () => { const age = $('#ageIn').value; if (age === '') { toast('Please choose your age first'); $('#ageIn').focus(); return; }
+      const n = $('#nameIn').value.trim() || 'Rookie'; P = C.newPlayer(n); P.look = looks[sel]; C.setAgeGroup(P, age); C.dailyCheck(P, now()); persist(); bootServices();
       modal(`<h2>Welcome, ${esc(P.name)}!</h2>` + dialog(hal().look, `Coach Hal: "I'm Hal Quimby - I bowled on tour for thirty years. Win matches, train at the Practice Alley, and there's no limit to how good you can get. Oh, and watch out for a show-off named Brock... Let me show you around!"`), [{ label: "Let's go!", cls: 'green', id: 'welcomeBtn', fn: () => { C.tutStart(P); persist(); show('hub'); } }]); fillAvatars($('#modal')); };
   };
   RENDER.hub = () => {
@@ -1442,13 +1886,34 @@ button,.btn,select{min-height:44px}
       preMatch({ mode: 'story', op: o, oppIndex: isCur ? i : -1, alley: ch.alley, scripted: !!(o.scripted && isCur), final: !!o.final, line: o.rival ? D.RIVAL.forms[o.rival].pre : o.line }); }));
   };
   // ---------- PvP ----------
-  RENDER.pvp = () => {
+  RENDER.pvp = () => { if (onlineOn()) return renderOnlinePvp(); renderSimPvp(); };
+  function pvpAlley() { const alleys = Object.keys(D.ALLEYS).filter(a => a !== 'practice' && C.isUnlocked(P, D.ALLEYS[a])); return alleys[alleys.length - 1]; }
+  function renderOnlinePvp() {
+    const o = ON.ensure(P);
+    $('#pvp').innerHTML = topbar() + `<h2>⚔️ Online PvP</h2><div class="card muted" id="pvpStatus">🌐 Connecting to the online arena...</div>`;
+    connectOnline().then(async s => {
+      if (current !== 'pvp') return;
+      if (!s) return renderSimPvp('📴 Could not reach the online arena (offline?). These rivals are simulated on your device for now.');
+      if (!s.hasNickname()) { $('#pvp').innerHTML = topbar() + `<h2>⚔️ Online PvP</h2><div class="card"><b>Pick your online name to play real players.</b><p class="muted">You build it from preset words (no typing), so names stay friendly. There is no chat.</p><button class="btn green" id="pickName">🏷️ Choose my name</button></div>`; $('#pickName').onclick = () => nameBuilder(() => RENDER.pvp()); return; }
+      let ops; try { ops = await s.findOpponents(P, 3); } catch (e) { return renderSimPvp('📴 Matchmaking is unavailable right now. These rivals are simulated on your device.'); }
+      if (current !== 'pvp') return;
+      let html = topbar() + `<h2>⚔️ Online PvP · Elo ${o.elo}</h2><p class="muted">Playing as <b>${esc(o.nickname)}</b> · record ${o.wins}-${o.losses}. Matches replay both bowlers' cards with a shared seed. Fair Play gear cap is on.</p>`;
+      if (ops.some(r => r.filler)) html += `<div class="banner">🤖 Not enough real players near your Elo yet, so some rivals are AI practice bowlers (marked AI). AI matches are unranked.</div>`;
+      ops.forEach((r, i) => { const pat = D.PATTERNS[r.pattern]; html += `<div class="card row"><span data-look="${esc(r.name)}"></span><div class="grow"><b>${esc(r.name)}</b> ${r.online ? '<span class="tag ok">ONLINE</span>' : '<span class="tag">AI</span>'}<div class="muted">${r.online ? 'Elo ' + r.elo + ' · ' + r.record + ' · ' : 'Practice · unranked · '}rating ${C.rating(r.stats)} · 🛢️ ${esc(pat.name)}</div></div><button class="btn small blue" data-r="${i}">Challenge</button></div>`; });
+      $('#pvp').innerHTML = html; fillAvatars($('#pvp'));
+      $('#pvp').querySelectorAll('[data-r]').forEach(b => (b.onclick = () => { const r = ops[+b.dataset.r];
+        if (r.online) { if (!s.canPlayRanked()) return toast('Next ranked match in ' + Math.ceil(s.waitMs() / 1000) + 's'); const prep = s.prepareMatch(P, r); prep.op.elo = r.elo;
+          preMatch({ mode: 'pvp', online: true, opp: r, prep, op: prep.op, alley: pvpAlley(), patternId: prep.patternId, line: 'GLHF!' }); }
+        else preMatch({ mode: 'pvp', unranked: true, op: r, alley: pvpAlley(), patternId: r.pattern, line: 'Beep boop. Practice game! (AI rival)' }); }));
+    });
+  }
+  function renderSimPvp(note) {
     const rivals = C.generateRivals(P, (Date.now() / 60000) | 0, 3); RENDER.pvp.rivals = rivals;
-    let html = topbar() + `<div class="banner">⚠️ SIMULATED PvP — these "online" rivals are generated on your device. No real network play in this prototype.</div><h2>⚔️ Ranked PvP · ${P.pvp.rating}</h2><p class="muted">Fair Play: gear bonuses capped at 15% of base stats. Ranked uses challenge & sport patterns once you leave Bronze. Record ${P.pvp.wins}-${P.pvp.losses}.</p>`;
+    let html = topbar() + (note ? `<div class="banner">${note}</div>` : '') + `<div class="banner">⚠️ SIMULATED PvP — these "online" rivals are generated on your device. No real network play in this prototype.</div><h2>⚔️ Ranked PvP · ${P.pvp.rating}</h2><p class="muted">Fair Play: gear bonuses capped at 15% of base stats. Ranked uses challenge & sport patterns once you leave Bronze. Record ${P.pvp.wins}-${P.pvp.losses}.</p>`;
     rivals.forEach((r, i) => { const pat = D.PATTERNS[r.pattern]; html += `<div class="card row"><span data-look="${esc(r.name)}"></span><div class="grow"><b>${esc(r.name)}</b> <span class="tag">SIM</span><div class="muted">Elo ${r.elo} · rating ${C.rating(r.stats)} · 🛢️ ${esc(pat.name)} <span class="tag ${pat.kind}">${pat.kind}</span></div></div><button class="btn small blue" data-r="${i}">Challenge</button></div>`; });
     $('#pvp').innerHTML = html; fillAvatars($('#pvp'));
     $('#pvp').querySelectorAll('[data-r]').forEach(b => (b.onclick = () => { const r = rivals[+b.dataset.r]; const alleys = Object.keys(D.ALLEYS).filter(a => a !== 'practice' && C.isUnlocked(P, D.ALLEYS[a])); preMatch({ mode: 'pvp', op: r, rival: r, alley: alleys[alleys.length - 1], patternId: r.pattern, line: 'GLHF! (simulated rival)' }); }));
-  };
+  }
   RENDER.alleys = () => {
     let html = topbar() + '<h2>🗺️ Alleys</h2><p class="muted">Unlock new alleys by clearing story chapters. Exhibition matches earn XP and coins against locals.</p>';
     Object.entries(D.ALLEYS).forEach(([id, a]) => { const un = C.isUnlocked(P, a); const pat = C.alleyPattern(id);
@@ -1470,12 +1935,30 @@ button,.btn,select{min-height:44px}
     html += `<div class="card"><b>Rating ${C.rating(base)}</b> (${C.tierOf(C.rating(base))}) — sum of base stats, used for leaderboards and matchmaking.${P.xpBoost ? `<br><span class="tag">Double XP: ${P.xpBoost} matches</span>` : ''}</div>`;
     $('#stats').innerHTML = html;
   };
-  RENDER.leaderboard = () => {
+  let lbTab = 'rating';
+  RENDER.leaderboard = () => { if (onlineOn()) return renderOnlineBoard(); renderLocalBoard(); };
+  function renderOnlineBoard() {
+    const tabs = [['rating', '⭐ Rating'], ['pvp', '⚔️ PvP'], ['week', '📅 Week'], ['season', '🏆 Season']];
+    const head = topbar() + `<h2>🏅 Online Leaderboards</h2><div class="tabs">${tabs.map(([k, l]) => `<button class="btn ${k === lbTab ? 'sel' : ''}" data-lb="${k}">${l}</button>`).join('')}</div>`;
+    const bindTabs = () => $('#leaderboard').querySelectorAll('[data-lb]').forEach(b => (b.onclick = () => { lbTab = b.dataset.lb; RENDER.leaderboard(); }));
+    $('#leaderboard').innerHTML = head + '<div class="card muted">🌐 Loading the top 100...</div>'; bindTabs();
+    connectOnline().then(async s => {
+      if (current !== 'leaderboard') return; if (!s) return renderLocalBoard('📴 Could not reach the online leaderboard (offline?). Showing your local board.');
+      let lb; try { lb = await s.leaderboard(lbTab, P); } catch (e) { return renderLocalBoard('📴 The online leaderboard is unavailable right now. Showing your local board.'); }
+      if (current !== 'leaderboard') return;
+      let html = head + `<p class="muted">${esc(lb.period)} · top ${lb.rows.length}${s.hasNickname() ? '' : ' · <a href="#" id="lbName">pick an online name</a> to appear here'}</p><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th><th>Tier</th><th>${esc(lb.label)}</th></tr>`;
+      lb.rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${esc(r.name)}${r.you ? ' (You)' : ''}</td><td>${r.tier}</td><td>${r.value}</td></tr>`));
+      if (!lb.rows.length) html += '<tr><td colspan="4" class="muted">No scores yet. Be the first!</td></tr>';
+      html += '</table></div>' + (lb.me && !lb.rows.some(r => r.you) ? `<div class="card"><b>Your rank: #${lb.me.rank}</b> · ${esc(lb.label)} ${lb.me.value}</div>` : '');
+      $('#leaderboard').innerHTML = html; bindTabs(); const ln = $('#lbName'); if (ln) ln.onclick = e => { e.preventDefault(); nameBuilder(() => RENDER.leaderboard()); };
+    });
+  }
+  function renderLocalBoard(note) {
     const rows = C.leaderboard(P);
-    let html = topbar() + `<h2>🏅 Leaderboard · Season 1</h2><div class="banner">Local leaderboard (on-device). Online seasonal & bracketed boards need a backend.</div><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th><th>Tier</th><th>Rating</th><th>Best</th></tr>`;
+    let html = topbar() + `<h2>🏅 Leaderboard · Season 1</h2>${note ? `<div class="banner">${note}</div>` : ''}<div class="banner">Local leaderboard (on-device). Online seasonal & bracketed boards need a backend.</div><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th><th>Tier</th><th>Rating</th><th>Best</th></tr>`;
     rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.tier}</td><td>${r.rating}</td><td>${r.best}</td></tr>`));
     $('#leaderboard').innerHTML = html + '</table></div>';
-  };
+  }
 
   // ---------- Settings (sound) ----------
   RENDER.settings = () => {
@@ -1484,6 +1967,7 @@ button,.btn,select{min-height:44px}
     $('#settings').innerHTML = topbar() + `<h2>⚙️ Settings</h2>${sup ? '' : '<div class="banner">This browser has no Web Audio support, so the game will be silent.</div>'}` +
       row('sfx', '🔊', 'Sound Effects', 'Ball roll, pin crashes, cheers, buttons', st.sfx, st.sfxVol) + row('music', '🎵', 'Music', 'Menu, match and rival themes', st.music, st.musicVol) +
       `<button class="btn" id="testSfx">▶ Test sound</button><h2 style="margin-top:14px">🎓 Coach Hal</h2><div class="card"><div class="row"><span style="font-size:28px">💡</span><div class="grow"><b>Coach tips</b><div class="muted">A quick tip the first time you open a screen</div></div><button class="btn small toggle ${P.tutorial.tips !== false ? 'green' : 'gray'}" id="tipsToggle" role="switch" aria-checked="${P.tutorial.tips !== false}">${P.tutorial.tips !== false ? 'ON' : 'OFF'}</button></div><button class="btn green" id="replayTut" style="margin-top:8px">🔁 Replay tutorial</button><div class="muted" style="margin-top:4px">${P.tutorial.rewarded ? 'Tour reward already collected.' : `Finish the tour to earn ${D.TUTORIAL.reward} coins.`}</div></div><div class="card muted" style="margin-top:10px">All sounds and music are original and made in code. Settings save on this device.<br>📱 iPhone: if you hear nothing, turn off Silent Mode (the switch on the side of the phone) and turn the volume up.</div>` +
+      onlineCard() +
       `<h2 style="margin-top:14px">📜 Privacy &amp; Terms</h2><div class="card" id="legalCard"><div class="grid"><a class="btn blue" id="privacyLink" href="privacy.html" style="text-decoration:none;text-align:center">🔒 Privacy Policy</a><a class="btn blue" id="termsLink" href="terms.html" style="text-decoration:none;text-align:center">📜 Terms of Use</a></div><a class="btn gray" id="deleteDataLink" href="privacy.html#delete" style="text-decoration:none;text-align:center;display:block;margin-top:8px">🗑️ Delete my data</a><div class="muted" style="margin-top:6px">No chat, no real names needed. Your progress saves on this device.</div></div>`;
     const bind = k => {
       $('#' + k + 'Toggle').onclick = () => { const on = !AU.settings()[k]; AU.set({ [k]: on }); if (on && k === 'sfx') setTimeout(() => sfx('coin'), 30); RENDER.settings(); };
@@ -1493,8 +1977,30 @@ button,.btn,select{min-height:44px}
     bind('sfx'); bind('music');
     $('#tipsToggle').onclick = () => { C.setTips(P, P.tutorial.tips === false); persist(); RENDER.settings(); };
     $('#replayTut').onclick = () => { C.tutReplay(P); persist(); show('hub'); };
+    bindOnlineCard();
     $('#testSfx').onclick = () => { sfx('release'); sfx('pins', { count: 10, strike: true, delay: 0.5 }); sfx('strike', { delay: 0.7 }); };
   };
+
+  function onlineCard() {
+    const ag = (P.privacy && P.privacy.ageGroup) || null, adTxt = ag === 'adult' || ag === 'teen' ? 'Family-safe (G-rated), non-personalized ads.' : 'Kid-safe ads: child-directed, G-rated, non-personalized.';
+    const id = online && online.uid; const o = P.online || {};
+    return `<h2 style="margin-top:14px">🌐 Online &amp; Privacy</h2><div class="card" id="onlineCard">` +
+      (onlineOn() ? `<div class="row"><div class="grow"><b>Player ID</b><div class="muted" id="playerId" style="word-break:break-all;user-select:all">${id ? esc(id) : 'Connecting...'}</div></div></div>` +
+        `<div class="muted" style="margin-top:4px">Online name: <b>${esc(o.nickname || 'not chosen yet')}</b>${o.nickname ? ` · Elo ${o.elo}` : ''}</div>` +
+        `<div class="grid" style="margin-top:8px"><button class="btn blue" id="nameBtn" ${id ? '' : 'disabled'}>🏷️ ${o.nickname ? 'Change' : 'Choose'} online name</button><button class="btn orange" id="delOnline" ${id ? '' : 'disabled'}>🗑️ Delete my online data</button></div>`
+        : `<div class="muted">Online play is off in this version: PvP rivals are simulated and the leaderboard is on this device only. Nothing about you is sent to a server by the game.</div>`) +
+      `<div class="muted" style="margin-top:8px">📺 ${adTxt}</div>${MON && MON.ads.privacyOptions ? '<button class="btn gray" id="adPrivacy" style="margin-top:6px">Ad privacy choices</button>' : ''}` +
+      `<button class="btn gray" id="resetLocal" style="margin-top:8px">🧹 Erase this device's save</button></div>`;
+  }
+  function bindOnlineCard() {
+    if (onlineOn() && !online) connectOnline().then(s => { if (s && current === 'settings') RENDER.settings(); });
+    const nb = $('#nameBtn'); if (nb) nb.onclick = () => nameBuilder(() => RENDER.settings());
+    const ap = $('#adPrivacy'); if (ap) ap.onclick = () => MON.showPrivacyOptions();
+    const del = $('#delOnline'); if (del) del.onclick = () => modal('<h2>Delete my online data?</h2><p>This permanently deletes your online name, scores, rating, match history and anonymous Player ID from our server, and removes you from leaderboards. Your bowler on this device stays.</p>',
+      [{ label: 'Delete online data', cls: 'orange', id: 'delConfirm', fn: async () => { try { await online.deleteOnlineData(P); online = null; persist(); toast('Your online data was deleted'); } catch (e) { toast('Could not reach the server. Try again later.'); } if (current === 'settings') RENDER.settings(); } }, { label: 'Cancel', cls: 'gray' }]);
+    $('#resetLocal').onclick = () => modal('<h2>Erase this device\'s save?</h2><p>This erases your bowler, coins and progress on this device. It does not delete online data (use "Delete my online data" for that). Remove Ads can be restored with Restore Purchases.</p>',
+      [{ label: 'Erase', cls: 'orange', id: 'resetConfirm', fn: () => { localStorage.removeItem(C.SAVE_KEY); localStorage.removeItem(C.LEGACY_SAVE_KEY); location.reload(); } }, { label: 'Cancel', cls: 'gray' }]);
+  }
 
   // ---------- Shops & gear ----------
   let shopTab = 'corner';
@@ -1581,22 +2087,26 @@ button,.btn,select{min-height:44px}
       [{ label: 'Continue', cls: 'green', keep: true, fn: () => { if (parseInt($('#pgIn').value, 10) === a * b) { closeModal(); onPass(); } else toast('Not quite - ask a grown-up!'); } }, { label: 'Cancel', cls: 'gray' }]);
   }
   RENDER.style = () => {
-    let html = topbar() + `<div class="banner">DEMO — NO REAL PURCHASES. Prices show how the real store would look. Nothing is charged.</div><h2>👕 Style Shop</h2><div class="card muted">Cosmetics have <b>no stat effects</b>. Buy with coins or gems. No loot boxes: you always know exactly what you get.</div><div class="tabs">${[['outfit', '👕 Outfits'], ['ball', '🎳 Ball designs'], ['celebration', '🎉 Celebrations']].map(([k, l]) => `<button class="btn ${k === styleTab ? 'sel' : ''}" data-st="${k}">${l}</button>`).join('')}</div>`;
+    let html = topbar() + (storeLive() ? '' : `<div class="banner">DEMO — NO REAL PURCHASES. Prices show how the real store would look. Nothing is charged.</div>`) + `<h2>👕 Style Shop</h2><div class="card muted">Cosmetics have <b>no stat effects</b>. Buy with coins or gems. No loot boxes: you always know exactly what you get.</div><div class="tabs">${[['outfit', '👕 Outfits'], ['ball', '🎳 Ball designs'], ['celebration', '🎉 Celebrations']].map(([k, l]) => `<button class="btn ${k === styleTab ? 'sel' : ''}" data-st="${k}">${l}</button>`).join('')}</div>`;
     D.COSMETICS.filter(c => c.type === styleTab).forEach(c => { const own = P.cosmetics.includes(c.id), eq = P.cos[c.type] === c.id;
       const icon = c.type === 'celebration' ? `<span style="font-size:26px">${{ thumbs: '👍', confetti: '🎊', stars: '⭐', fireworks: '🎆', disco: '🪩' }[c.fx]}</span>` : c.color ? swatch(c.color === 'rainbow' ? ['#a855f7', '#facc15'] : [c.color, c.color2 || '#fff']) : swatch(['#94a3b8', '#fff']);
       html += `<div class="card row">${icon}<div class="grow"><b>${esc(c.name)}</b><div class="muted">Cosmetic only</div></div>${own ? (eq ? '<span class="tag ok">Equipped</span>' : `<button class="btn small green" data-ceq="${c.id}">Equip</button>`) : `<button class="btn small" data-cbuy="${c.id}">${c.gems ? '💎 ' + c.gems : '🪙 ' + c.coins}</button>`}</div>`; });
     if (styleTab === 'ball' && P.cos.ball) html += `<button class="btn small gray" data-ceq="">Use brand colors</button>`;
-    html += `<h2>🚫 Remove Ads</h2><div class="card row" id="removeAdsCard"><span style="font-size:28px">🚫</span><div class="grow"><b>Remove Ads — $${D.REMOVE_ADS.usd.toFixed(2)}</b><div class="muted">One-time (non-consumable). Removes banners and between-match ads. Optional reward ads stay available.</div></div>${P.entitlements.removeAds ? '<span class="tag ok">Owned</span>' : `<button class="btn small blue" id="buyRemoveAds">$${D.REMOVE_ADS.usd.toFixed(2)} (demo)</button>`}</div><button class="btn small gray" id="restoreBtn">Restore Purchases</button>`;
+    html += `<h2>🚫 Remove Ads</h2><div class="card row" id="removeAdsCard"><span style="font-size:28px">🚫</span><div class="grow"><b>Remove Ads — $${D.REMOVE_ADS.usd.toFixed(2)}</b><div class="muted">One-time (non-consumable). Removes banners and between-match ads. Optional reward ads stay available.</div></div>${P.entitlements.removeAds ? '<span class="tag ok">Owned</span>' : `<button class="btn small blue" id="buyRemoveAds">${storeLive() ? MON.price(D.REMOVE_ADS.sku, D.REMOVE_ADS.usd) : '$' + D.REMOVE_ADS.usd.toFixed(2) + ' (demo)'}</button>`}</div><button class="btn small gray" id="restoreBtn">Restore Purchases</button>`;
     html += `<h2>💎 Gems</h2>`;
-    D.GEM_PACKS.forEach(g => (html += `<div class="card row"><span style="font-size:28px">💎</span><div class="grow"><b>${g.gems} Gems</b><div class="muted">${g.label}</div></div><button class="btn small blue" data-pack="${g.id}">$${g.usd.toFixed(2)} (demo)</button></div>`));
+    D.GEM_PACKS.forEach(g => (html += `<div class="card row"><span style="font-size:28px">💎</span><div class="grow"><b>${g.gems} Gems</b><div class="muted">${g.label}</div></div><button class="btn small blue" data-pack="${g.id}">${storeLive() ? MON.price(g.sku, g.usd) : '$' + g.usd.toFixed(2) + ' (demo)'}</button></div>`));
     D.PREMIUM_ITEMS.forEach(it => (html += `<div class="card row"><span style="font-size:26px">${it.type === 'coins' ? '🪙' : '⚡'}</span><div class="grow"><b>${esc(it.name)}</b><div class="muted">Convenience, no stat power</div></div><button class="btn small" data-prem="${it.id}">💎 ${it.gems}</button></div>`));
     $('#style').innerHTML = html;
     $('#style').querySelectorAll('[data-st]').forEach(b => (b.onclick = () => { styleTab = b.dataset.st; RENDER.style(); }));
     $('#style').querySelectorAll('[data-cbuy]').forEach(b => (b.onclick = () => { const r = C.buyCosmetic(P, b.dataset.cbuy); toast(r.msg); sfx(r.ok ? 'coin' : 'denied'); if (r.ok) { C.equipCosmetic(P, b.dataset.cbuy); persist(); RENDER.style(); } }));
     $('#style').querySelectorAll('[data-ceq]').forEach(b => (b.onclick = () => { if (b.dataset.ceq) C.equipCosmetic(P, b.dataset.ceq); else P.cos.ball = null; persist(); RENDER.style(); }));
-    const bra = $('#buyRemoveAds'); if (bra) bra.onclick = () => parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this opens the App Store / Google Play checkout for the <b>Remove Ads</b> non-consumable at <b>$2.99</b>.</p><p>Demo mode: entitlement granted, no money charged.</p>`, [{ label: 'OK', fn: () => { C.purchaseRemoveAds(P, localStorage); sfx('coin'); persist(); RENDER.style(); } }]));
-    $('#restoreBtn').onclick = () => { const ok = C.restorePurchases(P, localStorage); persist(); toast(ok ? 'Restored: Remove Ads' : 'Nothing to restore (demo)'); RENDER.style(); };
-    $('#style').querySelectorAll('[data-pack]').forEach(b => (b.onclick = () => { const g = D.GEM_PACKS.find(x => x.id === b.dataset.pack); parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this would open the store checkout for <b>$${g.usd.toFixed(2)}</b>.</p><p>Demo mode: ${g.gems} gems added for testing. No money was charged.</p>`, [{ label: 'OK', fn: () => { P.gems += g.gems; sfx('coin'); persist(); RENDER.style(); } }])); }));
+    const bra = $('#buyRemoveAds'); if (bra && storeLive()) bra.onclick = () => parentGate(() => MON.buy(D.REMOVE_ADS.sku).then(r => { if (r.ok && r.removeAds) { C.purchaseRemoveAds(P, localStorage); MON.removeBanner(); sfx('coin'); persist(); toast('Thank you! Ads removed.'); } else if (!r.cancelled) toast(r.msg || 'Purchase did not complete'); RENDER.style(); }));
+    else if (bra) bra.onclick = () => parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this opens the App Store / Google Play checkout for the <b>Remove Ads</b> non-consumable at <b>$2.99</b>.</p><p>Demo mode: entitlement granted, no money charged.</p>`, [{ label: 'OK', fn: () => { C.purchaseRemoveAds(P, localStorage); sfx('coin'); persist(); RENDER.style(); } }]));
+    if (storeLive()) $('#restoreBtn').onclick = () => MON.restore().then(r => { if (r.ok && r.removeAds) { C.purchaseRemoveAds(P, localStorage); MON.removeBanner(); persist(); toast('Restored: Remove Ads'); } else toast(r.ok ? 'No purchases to restore' : (r.msg || 'Restore failed')); RENDER.style(); });
+    else $('#restoreBtn').onclick = () => { const ok = C.restorePurchases(P, localStorage); persist(); toast(ok ? 'Restored: Remove Ads' : 'Nothing to restore (demo)'); RENDER.style(); };
+    $('#style').querySelectorAll('[data-pack]').forEach(b => (b.onclick = () => { const g = D.GEM_PACKS.find(x => x.id === b.dataset.pack);
+      if (storeLive()) return parentGate(() => MON.buy(g.sku).then(r => { if (r.ok) { const n = C.grantGemPack(P, g.id, r.txId); sfx('coin'); persist(); toast('+' + n + ' gems!'); } else if (!r.cancelled) toast(r.msg || 'Purchase did not complete'); RENDER.style(); }));
+      parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this would open the store checkout for <b>$${g.usd.toFixed(2)}</b>.</p><p>Demo mode: ${g.gems} gems added for testing. No money was charged.</p>`, [{ label: 'OK', fn: () => { P.gems += g.gems; sfx('coin'); persist(); RENDER.style(); } }])); }));
     $('#style').querySelectorAll('[data-prem]').forEach(b => (b.onclick = () => { const it = D.PREMIUM_ITEMS.find(x => x.id === b.dataset.prem); if (P.gems < it.gems) { sfx('denied'); return toast('Not enough gems'); } sfx('coin'); P.gems -= it.gems; if (it.type === 'coins') P.coins += it.amount; if (it.type === 'xpboost') P.xpBoost += it.amount; persist(); toast('Got ' + it.name + '!'); RENDER.style(); }));
   };
 
@@ -1629,11 +2139,11 @@ button,.btn,select{min-height:44px}
   // ---------- Match ----------
   function preMatch(cfg) {
     const alley = D.ALLEYS[cfg.alley]; const pat = D.PATTERNS[cfg.patternId || alley.pattern];
-    const ob = cfg.op.simulated ? cfg.op : C.opponentBowler(cfg.op); const me = C.playerBowler(P, { fairPlay: cfg.mode === 'pvp' });
+    const ob = cfg.op.simulated || cfg.op.isBowler ? cfg.op : C.opponentBowler(cfg.op); const me = cfg.prep ? cfg.prep.me : C.playerBowler(P, { fairPlay: cfg.mode === 'pvp' });
     const fit = C.laneFit(C.ballProfile(me.ball, me.condition).hook, me.stats.spin / (C.rating(me.stats) / 5), pat, 0);
     const fitTxt = fit > 0.75 ? '<span class="tag ok">Great fit for this pattern</span>' : fit > 0.45 ? '<span class="tag">OK fit</span>' : '<span class="tag warn">Poor fit - try another ball</span>';
     const look = ob.isRival ? D.RIVAL.look : ob.pro && ob.pro.look ? ob.pro.look : lookFor(ob.name);
-    modal(`<h2>${cfg.mode === 'pvp' ? '⚔️ PvP (simulated)' : cfg.mode === 'story' ? (cfg.final ? '🏆 Title Final' : '📖 Story match') : '🎳 Exhibition'}</h2><div class="muted">${alley.name} · difficulty ${alley.difficulty}</div>
+    modal(`<h2>${cfg.mode === 'pvp' ? (cfg.online ? '⚔️ Online PvP (ranked)' : cfg.unranked ? '🤖 AI practice (unranked)' : '⚔️ PvP (simulated)') : cfg.mode === 'story' ? (cfg.final ? '🏆 Title Final' : '📖 Story match') : '🎳 Exhibition'}</h2><div class="muted">${alley.name} · difficulty ${alley.difficulty}</div>
       ${dialog(look, `<b>${esc(ob.name)}${ob.isRival ? ' "Showtime"' : ''}:</b> "${esc(cfg.line || 'Good luck!')}"`, ob.isRival ? 'brock' : '')}
       ${ob.isRival ? modalTip('brock') : ''}${pat.kind === 'sport' ? modalTip('sport') : ''}${patternCard(pat)}${dialog(hal().look, `Coach Hal: "${pat.kind === 'sport' ? 'Sport shot - misses get punished. ' : ''}Try a ${C.recommendBall(pat).toLowerCase()} here.${C.altBallHook(P) != null ? ' Your second ball is ready for when the lanes break down.' : ''}"`)}
       <div class="card" style="box-shadow:none;border:2px solid #ede9fe"><b>Your ball:</b> ${esc(me.ball.name)} ${fitTxt}<div class="muted">Your rating ${C.rating(C.baseStats(P))} vs ${C.rating(ob.stats)}${cfg.mode === 'pvp' ? ' · Fair Play gear cap on' : ''} · Special shots: ${P.equippedSkills.map(id => D.SKILLS[id].icon).join(' ') || 'none'}</div>
@@ -1645,11 +2155,11 @@ button,.btn,select{min-height:44px}
   let speed = 1, skip = false, lane = null;
   async function startMatch(cfg, ob, useRosin, pat) {
     if (useRosin && P.consumables.rosin) P.consumables.rosin--; else useRosin = false;
-    const seed = window.__seed != null ? window.__seed : (Date.now() ^ (Math.random() * 1e9)) >>> 0;
-    const res = C.playMatch(P, ob, cfg.alley, seed, { fairPlay: cfg.mode === 'pvp', useRosin, scripted: cfg.scripted, patternId: pat && pat.id ? pat.id : (cfg.patternId || undefined) });
+    const seed = cfg.prep ? cfg.prep.seed : window.__seed != null ? window.__seed : (Date.now() ^ (Math.random() * 1e9)) >>> 0;
+    const res = C.playMatch(cfg.prep ? cfg.prep.me : P, ob, cfg.alley, seed, { fairPlay: cfg.mode === 'pvp', useRosin, scripted: cfg.scripted, patternId: pat && pat.id ? pat.id : (cfg.patternId || undefined) });
     const alley = D.ALLEYS[cfg.alley]; const ball = C.ballById(P.equipped.ball);
     show('match'); skip = false; speed = fast() ? 8 : 1; AU.music(ob.isRival || cfg.final ? 'tense' : 'match');
-    $('#match').innerHTML = `<div class="row" style="margin-bottom:6px"><b class="grow" style="color:#4c1d95">${alley.name}</b>${cfg.mode === 'pvp' ? '<span class="tag warn">SIMULATED PvP</span>' : ''}<span class="tag ${res.pattern.kind}">🛢️ ${esc(res.pattern.name)}</span></div><canvas id="lane"></canvas><div id="sc"></div><div class="speed"><button class="btn small" data-sp="1">1x</button><button class="btn small" data-sp="3">3x</button><button class="btn small orange" id="skipBtn">Skip ⏭</button></div>${C.tutStep(P) && C.tutStep(P).id === 'match' ? `<div class="tutmatch" id="tutMatchTip"><span class="tav"></span><div><b>Coach Hal:</b> ${esc(C.tutStep(P).text)}</div></div>` : ''}`;
+    $('#match').innerHTML = `<div class="row" style="margin-bottom:6px"><b class="grow" style="color:#4c1d95">${alley.name}</b>${cfg.mode === 'pvp' ? (cfg.online ? '<span class="tag ok">ONLINE PvP</span>' : cfg.unranked ? '<span class="tag">AI PRACTICE</span>' : '<span class="tag warn">SIMULATED PvP</span>') : ''}<span class="tag ${res.pattern.kind}">🛢️ ${esc(res.pattern.name)}</span></div><canvas id="lane"></canvas><div id="sc"></div><div class="speed"><button class="btn small" data-sp="1">1x</button><button class="btn small" data-sp="3">3x</button><button class="btn small orange" id="skipBtn">Skip ⏭</button></div>${C.tutStep(P) && C.tutStep(P).id === 'match' ? `<div class="tutmatch" id="tutMatchTip"><span class="tav"></span><div><b>Coach Hal:</b> ${esc(C.tutStep(P).text)}</div></div>` : ''}`;
     lane = new Lane($('#lane'), { theme: alley.theme, alleyName: alley.name, pattern: res.pattern }); window.__lane = lane; { const tv = $('#tutMatchTip .tav'); if (tv) tv.appendChild(avatar(hal().look, 34)); }
     $('#match').querySelectorAll('[data-sp]').forEach(b => (b.onclick = () => (speed = +b.dataset.sp)));
     $('#skipBtn').onclick = () => (skip = true);
@@ -1671,7 +2181,7 @@ button,.btn,select{min-height:44px}
       }
     }
     lane.setBadge(null);
-    const rw = C.applyMatch(P, res, cfg.mode, { oppIndex: cfg.oppIndex, rival: cfg.rival, now: now() }); if (rw.storyMsg) C.unlockSkills(P);
+    const rw = C.applyMatch(P, res, cfg.mode, { oppIndex: cfg.oppIndex, rival: cfg.rival, now: now() }); if (rw.storyMsg) C.unlockSkills(P); onlineAfterMatch(cfg, res);
     if (C.tutStep(P) && C.tutStep(P).id === 'match') { TUT.lastWin = res.win; C.tutGoto(P, 'afterMatch'); } persist();
     const ups = Object.entries(rw.ups).map(([k, v]) => `${D.STAT_INFO[k].icon} ${D.STAT_INFO[k].label} +${v}`).join(' · ');
     let extra = '';
@@ -1692,8 +2202,8 @@ button,.btn,select{min-height:44px}
     }
     AU.stinger(rw.champion ? 'champion' : res.win ? 'win' : 'loss', 'menu', rw.champion ? 5200 : 3400); if (ups) sfx('levelup', { delay: rw.champion ? 2.6 : 1.7 });
     const canRew = C.canWatchRewarded(P, now());
-    modal(`<h2>${res.win ? '🏆 You win!' : '😅 So close!'}</h2><p style="font-size:22px;text-align:center"><b>${res.player.total}</b> – ${res.opponent.total}</p><p>+${rw.xp} XP to every stat · +${rw.coins} coins${cfg.mode === 'pvp' ? ` · PvP rating ${P.pvp.rating}` : ''}${rw.counts.specials ? ` · ${rw.counts.specials} special shot(s)` : ''}</p>${ups ? `<p class="tag ok" style="display:block;padding:6px">LEVEL UP: ${ups}</p>` : ''}${extra}`,
-      [...(canRew ? [{ label: '🎬 Watch demo reward ad: +' + Math.max(25, Math.round(rw.coins * D.AD_CONFIG.rewardedCoinBonus)) + ' coins (optional)', cls: 'blue', id: 'rewardBtn', fn: () => rewardedAd(rw.coins, () => afterMatch(cfg)) }] : []), { label: 'Continue', cls: 'green', id: 'continueBtn', fn: () => afterMatch(cfg) }]);
+    modal(`<h2>${res.win ? '🏆 You win!' : '😅 So close!'}</h2><p style="font-size:22px;text-align:center"><b>${res.player.total}</b> – ${res.opponent.total}</p><p>+${rw.xp} XP to every stat · +${rw.coins} coins${cfg.mode === 'pvp' ? (cfg.online ? ' · ranked result saving online...' : cfg.unranked ? ' · unranked' : ` · PvP rating ${P.pvp.rating}`) : ''}${rw.counts.specials ? ` · ${rw.counts.specials} special shot(s)` : ''}</p>${ups ? `<p class="tag ok" style="display:block;padding:6px">LEVEL UP: ${ups}</p>` : ''}${extra}`,
+      [...(canRew ? [{ label: (adsLive() ? '🎬 Watch an ad: +' : '🎬 Watch demo reward ad: +') + Math.max(25, Math.round(rw.coins * D.AD_CONFIG.rewardedCoinBonus)) + ' coins (optional)', cls: 'blue', id: 'rewardBtn', fn: () => rewardedAd(rw.coins, () => afterMatch(cfg)) }] : []), { label: 'Continue', cls: 'green', id: 'continueBtn', fn: () => afterMatch(cfg) }]);
     fillAvatars($('#modal'));
     window.__lastMatch = { res, rw };
   }
@@ -1702,10 +2212,13 @@ button,.btn,select{min-height:44px}
     modal(`<div class="adfull"><div style="font-size:42px">📺</div>${title}<br><small>Placeholder DEMO ad · no real ad network · no tracking</small></div><p class="muted" id="adTimer">Close in ${secs}s</p>`, [{ label: rewarded ? 'Collect reward' : 'Close ad', id: 'adClose', disabled: secs > 0, fn: onDone }]);
     let s = secs; const t = setInterval(() => { s--; const el = $('#adTimer'), b = $('#adClose'); if (el) el.textContent = s > 0 ? `Close in ${s}s` : 'You can close the ad'; if (s <= 0) { clearInterval(t); if (b) b.disabled = false; } }, 1000);
   }
-  function rewardedAd(baseCoins, then) { adModal('DEMO REWARDED AD', fast() ? 0 : 3, () => { const c = C.grantRewarded(P, baseCoins, now()); persist(); sfx('coin'); toast('+' + c + ' bonus coins!'); then(); }, true); }
+  function rewardedAd(baseCoins, then) {
+    if (adsLive()) return MON.rewarded().then(ok => { if (ok) { const c = C.grantRewarded(P, baseCoins, now()); persist(); sfx('coin'); toast('+' + c + ' bonus coins!'); } else toast('No reward this time (the ad was not finished or none was available).'); then(); });
+    adModal('DEMO REWARDED AD', fast() ? 0 : 3, () => { const c = C.grantRewarded(P, baseCoins, now()); persist(); sfx('coin'); toast('+' + c + ' bonus coins!'); then(); }, true); }
   function afterMatch(cfg) {
     const go = () => show(cfg.mode === 'story' ? 'story' : cfg.mode === 'pvp' ? 'pvp' : 'hub');
-    if (C.shouldShowInterstitial(P, false)) { C.markInterstitialShown(P); persist(); adModal('DEMO INTERSTITIAL AD', fast() ? 0 : 3, go); }
+    if (C.shouldShowInterstitial(P, false) && adsLive()) { C.markInterstitialShown(P); persist(); AU.duck(true); MON.interstitial().then(() => { AU.duck(false); go(); }); }
+    else if (C.shouldShowInterstitial(P, false)) { C.markInterstitialShown(P); persist(); adModal('DEMO INTERSTITIAL AD', fast() ? 0 : 3, go); }
     else go();
   }
   // Demo hook for screenshots: freeze lane poses.
@@ -1820,9 +2333,11 @@ button,.btn,select{min-height:44px}
     document.querySelectorAll('.screen').forEach(s => obs.observe(s, { attributes: true, attributeFilter: ['class'] }));
     document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('button, .btn, select, canvas[style*="pointer"]'); if (!b || b.disabled) return; if (b.classList.contains('sndbtn')) show('settings'); sfx('click'); });
     P = C.load(); if (P && !P.version) P = null;
-    if (P) { C.unlockSkills(P); C.restorePurchases(P, localStorage); C.dailyCheck(P, now()); tutBootFix(); persist(); show('hub'); if (C.tutShouldOffer(P)) offerTour(); } else show('create');
+    if (P) { C.unlockSkills(P); C.restorePurchases(P, localStorage); C.dailyCheck(P, now()); tutBootFix(); persist(); show('hub');
+      const next = () => { bootServices(); if (C.tutShouldOffer(P)) offerTour(); };
+      if (!P.privacy.ageGroup) askAge(next); else next(); } else show('create');
   }
-  window.StrikeQuest = window.PinMasters = { getPlayer: () => P, audio: AU, show, toast, laneDemo, preMatch, save: persist, version: D.APP_VERSION,
+  window.StrikeQuest = window.PinMasters = { getPlayer: () => P, online: () => online, audio: AU, show, toast, laneDemo, preMatch, save: persist, version: D.APP_VERSION,
     tutorial: { step: () => (C.tutStep(P) || {}).id || null, state: () => P && P.tutorial, refresh: tutRefresh } };
   document.addEventListener('DOMContentLoaded', boot);
 })();
