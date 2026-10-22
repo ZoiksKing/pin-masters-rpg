@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.5.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.5.1"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -428,7 +428,7 @@ button,.btn,select{min-height:44px}
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.5.0';
+  const APP_VERSION = '0.5.1';
   const TUTORIAL = {
     reward: 100,
     steps: [
@@ -1044,7 +1044,10 @@ button,.btn,select{min-height:44px}
     const setP = (p, v, instant, tc) => { if (instant) { p.cancelScheduledValues(0); p.value = v; } else { const t = ctx.currentTime; p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); p.setTargetAtTime(v, t, tc || 0.06); } };
     const targets = () => ({ sfx: S.sfx ? S.sfxVol : 0, music: S.music ? S.musicVol * MUSIC_LEVEL : 0, duck: ducked ? 0 : 1 });
     function applyVolumes(instant) { if (!ctx) return; const g = targets(); setP(sfxBus.gain, g.sfx, instant); setP(musicBus.gain, g.music, instant, 0.15); setP(duckGain.gain, g.duck, instant, 0.12); }
-    const ready = () => ctx && unlocked && ctx.state === 'running';
+    // Playable when running, or while a resume() we just asked for (inside a tap) is still settling: Web Audio holds
+    // the scheduled nodes and plays them as soon as the context runs, so the button-click sound isn't dropped on iOS.
+    let resumeAt = 0; const nowMs = () => Date.now();
+    const ready = () => !!(ctx && unlocked && (ctx.state === 'running' || (ctx.state !== 'closed' && nowMs() - resumeAt < 1500)));
 
     // ---------------- synthesis primitives
     function tone(type, f, t, dur, vol, dest, o) {
@@ -1200,7 +1203,8 @@ button,.btn,select{min-height:44px}
     }
     let musicReturn = null;
     function stinger(name, thenTrack, ms) { clearTimeout(musicReturn); music(null); play(name); if (thenTrack) musicReturn = setTimeout(() => { if (!wanted) music(thenTrack); }, ms || 3200); }
-    function duck(on) { ducked = !!on; applyVolumes(false); }
+    let duckTimer = null;
+    function duck(on) { ducked = !!on; clearTimeout(duckTimer); if (ducked) duckTimer = setTimeout(() => { ducked = false; applyVolumes(false); }, 90000); applyVolumes(false); }
 
     // ---------------- optional file overrides (assets/audio/manifest.json)
     let ovLoaded = false; const BASE = 'assets/audio/';
@@ -1216,19 +1220,70 @@ button,.btn,select{min-height:44px}
         .then(buf => { OV[kind][name] = buf; if (kind === 'music' && name === current) { current = null; music(name); } return true; }).catch(e => { if (win.console) console.warn('audio override failed', url); return false; });
     }
 
-    // ---------------- unlock (iOS/Android autoplay rules), visibility, settings
-    function unlock() {
-      if (!ensure()) return; if (doc && doc.hidden) return;
-      if (ctx.state !== 'running') { const p = ctx.resume(); p && p.catch && p.catch(noop); }
-      if (!unlocked) { unlocked = true; try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) {} loadOverrides(); const w = wanted; wanted = null; music(w); }
+    // ---------------- unlock (iOS/Android autoplay rules), iOS audio session + silent switch, visibility, settings
+    // v0.5.1 hardening: every tap (capture phase on window AND document, so overlays/stopPropagation can't eat it) resumes
+    // the context while it is not 'running' (covers 'suspended' and iOS 'interrupted' after backgrounding / calls / Siri).
+    // If a context stays dead after several gesture resumes it is rebuilt. On iOS the ringer/silent switch mutes Web Audio
+    // by default: navigator.audioSession.type = 'playback' (Safari 16.4+) or, on older iOS, a looping silent <audio>
+    // element started inside the tap puts the page in the playback audio session so game sound plays with the switch on.
+    const nav = win && win.navigator;
+    const isIOS = !!(nav && (/iP(hone|od|ad)/.test(nav.userAgent || '') || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1)));
+    const wantSound = () => S.sfx || S.music;
+    let session = 'none', silentEl = null, failedResumes = 0, lastFail = 0, rebuilds = 0, lastGesture = 0;
+    function setSession() {
+      try { if (nav && nav.audioSession && 'type' in nav.audioSession) { const t = wantSound() ? 'playback' : 'ambient'; if (nav.audioSession.type !== t) nav.audioSession.type = t; session = t; return true; } } catch (e) {}
+      return false;
     }
+    function silentWavURI() {   // 0.5 s of 8 kHz 8-bit mono silence, built in code (no external file)
+      const n = 4000, b = new Uint8Array(44 + n), v = new DataView(b.buffer), w = (o, str) => { for (let i = 0; i < str.length; i++) b[o + i] = str.charCodeAt(i); };
+      w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+      v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true); b.fill(128, 44);
+      let bin = ''; for (let i = 0; i < b.length; i++) bin += String.fromCharCode(b[i]); return 'data:audio/wav;base64,' + win.btoa(bin);
+    }
+    function silentAudio(on) {
+      if (!doc || !isIOS || session === 'playback') { if (!on && silentEl) try { silentEl.pause(); } catch (e) {} return; }
+      try {
+        if (on) {
+          if (!silentEl) { silentEl = doc.createElement('audio'); silentEl.setAttribute('playsinline', ''); silentEl.setAttribute('webkit-playsinline', ''); silentEl.setAttribute('x-webkit-airplay', 'deny');
+            silentEl.loop = true; silentEl.preload = 'auto'; silentEl.disableRemotePlayback = true; silentEl.src = silentWavURI(); }
+          if (silentEl.paused) { const p = silentEl.play(); p && p.catch && p.catch(noop); }
+        } else if (silentEl && !silentEl.paused) silentEl.pause();
+      } catch (e) {}
+    }
+    function primeCtx() { try { const b = ctx.createBuffer(1, 1, 22050), s = ctx.createBufferSource(); s.buffer = b; s.connect(ctx.destination); s.start(0); } catch (e) {} }
+    function resume(fromGesture) {
+      if (!ctx || ctx.state === 'running' || ctx.state === 'closed') return;
+      resumeAt = nowMs(); let p; try { p = ctx.resume(); } catch (e) {}
+      const check = () => { if (!ctx) return; if (ctx.state === 'running') { failedResumes = 0; if (wanted && current !== wanted) { const w = wanted; current = null; music(w); } return; }
+        if (fromGesture && nowMs() - lastFail > 700) { lastFail = nowMs(); if (++failedResumes >= 3) rebuild(); } };
+      if (p && p.then) p.then(check, check); else setTimeout(check, 0);
+    }
+    function rebuild() {   // a context iOS refuses to resume: drop it and start a fresh one (inside the current tap)
+      if (rebuilds >= 5) return; rebuilds++; failedResumes = 0; const old = ctx; rollStop(); clearInterval(timer); timer = null; playing = []; const w = wanted || current; current = null;
+      ctx = null; try { old && old.close && old.close().catch(noop); } catch (e) {}
+      if (ensure()) { primeCtx(); resume(false); wanted = w; music(w); }
+    }
+    function unlock(e) {
+      if (doc && doc.hidden) return;
+      lastGesture = nowMs();
+      if (wantSound()) { setSession(); silentAudio(true); }
+      if (!ensure()) return;
+      if (ctx.state !== 'running') { primeCtx(); resume(true); }
+      if (!unlocked) { unlocked = true; primeCtx(); loadOverrides(); const w = wanted; wanted = null; music(w); }
+    }
+    function wake() { if (!ctx || !unlocked || (doc && doc.hidden)) return; resume(false); }   // no gesture: may be refused, the next tap retries
+    function sleep() { if (!ctx) return; rollStop(); silentAudio(false); if (ctx.state === 'running') { const p = ctx.suspend(); p && p.catch && p.catch(noop); } }
     if (doc) {
-      ['pointerdown', 'touchend', 'mousedown', 'click', 'keydown'].forEach(e => doc.addEventListener(e, unlock, true));
-      doc.addEventListener('visibilitychange', () => { if (!ctx) return; if (doc.hidden) { rollStop(); const p = ctx.suspend(); p && p.catch && p.catch(noop); } else if (unlocked) { const p = ctx.resume(); p && p.catch && p.catch(noop); } });
-      win.addEventListener && win.addEventListener('pagehide', () => { if (ctx) { const p = ctx.suspend(); p && p.catch && p.catch(noop); } });
+      const G = ['pointerdown', 'touchstart', 'touchend', 'mousedown', 'click', 'keydown'], opts = { capture: true, passive: true };
+      G.forEach(ev => { doc.addEventListener(ev, unlock, opts); win.addEventListener && win !== doc && win.addEventListener(ev, unlock, opts); });
+      doc.addEventListener('visibilitychange', () => { if (doc.hidden) sleep(); else wake(); });
+      if (win.addEventListener) {
+        win.addEventListener('pagehide', sleep);
+        win.addEventListener('pageshow', wake); win.addEventListener('focus', wake);
+      }
     }
-    function set(patch) { S = saveSettings(Object.assign({}, S, patch), store); applyVolumes(false); if (patch && patch.music === true && current == null && wanted == null) {} return Object.assign({}, S); }
-    function state() { return { supported: !!AC, ctx: ctx ? ctx.state : 'none', unlocked, track: current, wanted, ducked, settings: Object.assign({}, S), targets: targets(), overrides: { sfx: Object.keys(OV.sfx), music: Object.keys(OV.music) }, playing: playing.length, errors: errs }; }
+    function set(patch) { S = saveSettings(Object.assign({}, S, patch), store); applyVolumes(false); setSession(); if (!wantSound()) silentAudio(false); else if (unlocked && nowMs() - lastGesture < 1000) silentAudio(true); return Object.assign({}, S); }
+    function state() { return { supported: !!AC, ctx: ctx ? ctx.state : 'none', unlocked, session, silentAudio: !!(silentEl && !silentEl.paused), rebuilds, track: current, wanted, ducked, settings: Object.assign({}, S), targets: targets(), overrides: { sfx: Object.keys(OV.sfx), music: Object.keys(OV.music) }, playing: playing.length, errors: errs }; }
     return { settings: () => Object.assign({}, S), set, unlock, play, music, stinger, duck, rollStart, rollUpdate, rollStop, register, state, _sfx: SFX, _tick: tick, _ctx: () => ctx };
   }
   return { SETTINGS_KEY, DEFAULTS, SOUNDS, TRACK_NAMES, normalizeSettings, loadSettings, saveSettings, createEngine };
@@ -1687,25 +1742,36 @@ button,.btn,select{min-height:44px}
   const ownsRemoveAds = ci => !!(ci && ((ci.entitlements && ci.entitlements.active && ci.entitlements.active[rc().entitlement]) || (ci.allPurchasedProductIdentifiers || []).includes(rc().products.removeAds)));
   async function initStore(hooks) {
     if (!rcKey()) return; const P = N.Purchases;
+    // RevenueCat Test Store keys (test_...) are only allowed in the debug "test purchases" build (revenuecat.testing).
+    // Never configure one otherwise: the SDK deliberately crashes release builds that use a Test Store key.
+    if (/^test_/.test(rcKey()) && !rc().testing) { warn('Test Store key ignored outside a testing build'); return; }
+    M.store.testing = !!rc().testing;
+    if (M.store.testing) { try { await P.setLogLevel({ level: N.LOG_LEVEL.DEBUG }); } catch (e) {} }
     await P.configure({ apiKey: rcKey() }); M.store.live = true;
+    if (M.store.testing && document.body && !document.getElementById('pmTestStore')) { const b = document.createElement('div'); b.id = 'pmTestStore'; b.textContent = 'TEST PURCHASES · fake money'; b.style.cssText = 'position:fixed;top:calc(2px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:99999;background:#f59e0b;color:#111;font:700 10px system-ui;padding:2px 8px;border-radius:8px;pointer-events:none;opacity:.9'; document.body.appendChild(b); }
     const ids = [rc().products.removeAds, ...Object.values(rc().products.gems || {})];
-    try { const { products } = await P.getProducts({ productIdentifiers: ids, type: N.PRODUCT_CATEGORY.NON_SUBSCRIPTION }); products.forEach(p => { M.store.products[p.identifier] = p; M.store.prices[p.identifier] = p.priceString; }); }
+    const add = p => { if (p && p.identifier && ids.includes(p.identifier) && !M.store.products[p.identifier]) { M.store.products[p.identifier] = p; M.store.prices[p.identifier] = p.priceString; } };
+    try { const { products } = await P.getProducts({ productIdentifiers: ids, type: N.PRODUCT_CATEGORY.NON_SUBSCRIPTION }); (products || []).forEach(add); }
     catch (e) { warn('products', e); }
+    // Also read the 'default'/current offering, so products attached only via packages are found too. Empty is fine.
+    try { const o = await P.getOfferings(); const off = (o && (o.current || (o.all && o.all.default))) || null; ((off && off.availablePackages) || []).forEach(pk => add(pk && pk.product)); }
+    catch (e) { warn('offerings', e); }
+    M.store.ready = Object.keys(M.store.products).length > 0; // false = products not set up in the dashboard yet
     // Entitlement check on every launch (also picks up purchases made on another device with the same store account after Restore).
     try { const { customerInfo } = await P.getCustomerInfo(); if (ownsRemoveAds(customerInfo)) hooks.onRemoveAds && hooks.onRemoveAds(true); } catch (e) { warn('customerInfo', e); }
   }
   const cancelled = e => e && (e.userCancelled || String(e.code) === String(N.PURCHASES_ERROR_CODE.PURCHASE_CANCELLED_ERROR));
   // sku: the store product id (e.g. 'remove_ads', 'gems_small'). Resolves { ok, cancelled, msg, removeAds, txId }.
   M.buy = async function (sku) {
-    if (!M.store.live) return { ok: false, msg: 'Store not set up' };
-    const product = M.store.products[sku]; if (!product) return { ok: false, msg: 'This item is not available in the store yet. Please try again later.' };
+    if (!M.store.live) return { ok: false, msg: 'Store not set up yet' };
+    const product = M.store.products[sku]; if (!product) return { ok: false, msg: M.store.ready ? 'This item is not available in the store yet. Please try again later.' : 'Store not set up yet. Please try again later.' };
     try {
       const r = await N.Purchases.purchaseStoreProduct({ product });
       return { ok: true, removeAds: ownsRemoveAds(r.customerInfo), txId: (r.transaction && r.transaction.transactionIdentifier) || null, sku };
     } catch (e) { return cancelled(e) ? { ok: false, cancelled: true } : { ok: false, msg: (e && e.message) || 'Purchase failed' }; }
   };
   M.restore = async function () {
-    if (!M.store.live) return { ok: false, msg: 'Store not set up' };
+    if (!M.store.live) return { ok: false, msg: 'Store not set up yet' };
     try { const { customerInfo } = await N.Purchases.restorePurchases(); return { ok: true, removeAds: ownsRemoveAds(customerInfo) }; }
     catch (e) { return { ok: false, msg: (e && e.message) || 'Restore failed' }; }
   };
@@ -1744,7 +1810,7 @@ button,.btn,select{min-height:44px}
   // ---------- helpers ----------
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1800); }
   const RENDER = {};
-  function show(id) { current = id; if (id !== 'match') AU.music('menu'); if (RENDER[id]) RENDER[id](); if (P && adsLive()) MON.banner(C.bannerVisible(P, id)); document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id)); window.scrollTo(0, 0); tutRefresh(); }
+  function show(id) { current = id; AU.duck(false); if (id !== 'match') AU.music('menu'); if (RENDER[id]) RENDER[id](); if (P && adsLive()) MON.banner(C.bannerVisible(P, id)); document.querySelectorAll('.screen').forEach(s => s.classList.toggle('active', s.id === id)); window.scrollTo(0, 0); tutRefresh(); }
   function modal(html, buttons) {
     const m = $('#modal'); $('#modalBody').innerHTML = html; const bb = $('#modalBtns'); bb.innerHTML = '';
     (buttons || [{ label: 'OK' }]).forEach(b => { const e = document.createElement('button'); e.className = 'btn ' + (b.cls || ''); e.textContent = b.label; e.style.marginTop = '8px'; if (b.id) e.id = b.id; if (b.disabled) e.disabled = true; e.onclick = () => { if (!b.keep) m.classList.remove('show'); b.fn && b.fn(); if (!b.keep) tutRefresh(); }; bb.appendChild(e); });
