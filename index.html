@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.8.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.8.1"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -115,6 +115,9 @@ button,.btn,select{min-height:44px}
 
 .flair{display:inline-block;font-size:13px;line-height:18px;min-width:20px;text-align:center;border:2px solid #cbd5e1;border-radius:8px;padding:0 2px;margin-left:3px;background:#fff}
 table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
+
+/* v0.8.1 story chapter gate */
+.gatebox{background:#fff7ed;border:2px dashed #fdba74;border-radius:12px;padding:10px;margin:8px 0}.gatebar{height:14px}.gatebar>i{background:linear-gradient(90deg,#f59e0b,#facc15)}
 </style></head>
 <body><div id="app">
 <section class="screen" id="create"></section><section class="screen" id="hub"></section><section class="screen" id="story"></section>
@@ -341,38 +344,46 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     { id: 'quimby', name: 'Hal Quimby', nick: 'The Professor', style: 'Classic stroker; accuracy over revs (mentor)', look: { shirt: '#9d4edd', hair: '#ddd', skin: '#f1c27d', hat: 'none' }, bio: 'Hall-of-fame legend turned coach. Smooth, straight and almost never misses a spare.', stats: { power: 40, accuracy: 62, spin: 26, consistency: 58, focus: 62 }, ballHook: 0.55, swapTarget: 'Walter Ray Williams Jr.' }
   ];
 
-  // Story: 6 chapters, Local Rookie -> PBA Champion. "PBA" appears in story text only; needs licensing or renaming for release.
+  // Story: 6 chapters, Local Rookie -> PBA Champion. gate (v0.8.1) = Bowler Rating (sum of base stats, no gear) needed to START that chapter.
+  // Story: "PBA" appears in story text only; needs licensing or renaming for release.
   const STORY = [
-    { id: 1, title: 'Local Rookie', alley: 'sunnyside', intro: 'Coach Hal: "Everybody starts with a house ball and big dreams. Let\'s see your roll, rookie!"',
+    { id: 1, title: 'Local Rookie', alley: 'sunnyside', gate: 0, intro: 'Coach Hal: "Everybody starts with a house ball and big dreams. Let\'s see your roll, rookie!"',
       opponents: [
         { rival: 'rookie', scripted: true },
         { name: 'Benny Bumper', stats: { power: 5, accuracy: 4, spin: 3, consistency: 4, focus: 4 }, ballHook: 0.3, line: 'I only just stopped using the bumpers!' },
         { name: 'Lulu Lanes', stats: { power: 7, accuracy: 7, spin: 5, consistency: 6, focus: 6 }, ballHook: 0.4, line: 'My grandma taught me. She\'s still better than me.' },
         { name: 'Coach Dot', stats: { power: 9, accuracy: 10, spin: 7, consistency: 9, focus: 8 }, ballHook: 0.5, line: 'Beat me and you can join the Tuesday league.' }
       ] },
-    { id: 2, title: 'League Night', alley: 'cosmic', intro: 'Coach Hal: "Easy Street is light oil - a smoother urethane ball can help here."',
+    { id: 2, title: 'League Night', alley: 'cosmic', gate: 50, intro: 'Coach Hal: "Easy Street is light oil - a smoother urethane ball can help here."',
       opponents: [
         { name: 'Glowstick Gus', stats: { power: 12, accuracy: 11, spin: 10, consistency: 11, focus: 10 }, ballHook: 0.6, line: 'Disco lights make me bowl better. Probably.' },
-        { name: 'Priya Pocket', stats: { power: 14, accuracy: 15, spin: 12, consistency: 13, focus: 13 }, ballHook: 0.5, line: 'League champ three years running!' },
-        { name: 'The Lane Ranger', stats: { power: 17, accuracy: 16, spin: 15, consistency: 16, focus: 16 }, ballHook: 0.55, line: 'This lane ain\'t big enough for both of our averages.' }
+        { name: 'Priya Pocket', stats: { power: 13, accuracy: 14, spin: 11, consistency: 12, focus: 12 }, ballHook: 0.5, line: 'League champ three years running!' },
+        { name: 'The Lane Ranger', stats: { power: 15, accuracy: 14, spin: 14, consistency: 14, focus: 14 }, ballHook: 0.55, line: 'This lane ain\'t big enough for both of our averages.' }
       ] },
-    { id: 3, title: 'Regional Amateur', alley: 'riverbend', intro: 'Coach Hal: "Deep Soak is long and heavy. Stronger reactive balls with more hook will grip."',
+    { id: 3, title: 'Regional Amateur', alley: 'riverbend', gate: 85, intro: 'Coach Hal: "Deep Soak is long and heavy. Stronger reactive balls with more hook will grip."',
       opponents: [
-        { name: 'Riley Reactive', stats: { power: 18, accuracy: 16, spin: 19, consistency: 16, focus: 16 }, ballHook: 1.1, line: 'I brought six balls. You brought... one?' },
-        { name: 'Marisol Mark', stats: { power: 21, accuracy: 22, spin: 19, consistency: 21, focus: 20 }, ballHook: 1.0, line: 'Every board counts.' },
-        { name: 'Big Tony Tenpin', stats: { power: 25, accuracy: 22, spin: 22, consistency: 22, focus: 22 }, ballHook: 1.1, line: 'They call me Big Tony. Because of my scores.' },
-        { rival: 'regional' }
+        { name: 'Riley Reactive', stats: { power: 20, accuracy: 18, spin: 21, consistency: 18, focus: 18 }, ballHook: 1.1, line: 'I brought six balls. You brought... one?' },
+        { name: 'Marisol Mark', stats: { power: 24, accuracy: 25, spin: 21, consistency: 24, focus: 22 }, ballHook: 1.0, line: 'Every board counts.' },
+        { name: 'Big Tony Tenpin', stats: { power: 28, accuracy: 25, spin: 25, consistency: 25, focus: 25 }, ballHook: 1.1, line: 'They call me Big Tony. Because of my scores.' },
+        { rival: 'regional', stats: { power: 29, accuracy: 24, spin: 29, consistency: 23, focus: 23 } }
       ] },
-    { id: 4, title: 'State Open', alley: 'capitol', intro: 'Coach Hal: "Win the State Open and the Tour Supply Trailer will want to sponsor you."',
+    { id: 4, title: 'State Open', alley: 'capitol', gate: 140, intro: 'Coach Hal: "Win the State Open and the Tour Supply Trailer will want to sponsor you."',
       opponents: [
-        { name: 'Sasha Sparewell', stats: { power: 25, accuracy: 31, spin: 24, consistency: 29, focus: 27 }, ballHook: 0.8, line: 'I\'ve never missed a 10-pin. Today.' },
-        { name: 'Duke Doubles', stats: { power: 31, accuracy: 28, spin: 30, consistency: 28, focus: 28 }, ballHook: 0.85, line: 'Two strikes in a row? That\'s my warm-up.' },
-        { name: 'Queen Turkey', stats: { power: 33, accuracy: 32, spin: 32, consistency: 32, focus: 32 }, ballHook: 0.8, line: 'Gobble gobble. Three strikes coming up.' }
+        { name: 'Sasha Sparewell', stats: { power: 33, accuracy: 40, spin: 31, consistency: 38, focus: 35 }, ballHook: 0.8, line: 'I\'ve never missed a 10-pin. Today.' },
+        { name: 'Duke Doubles', stats: { power: 40, accuracy: 36, spin: 39, consistency: 36, focus: 36 }, ballHook: 0.85, line: 'Two strikes in a row? That\'s my warm-up.' },
+        { name: 'Queen Turkey', stats: { power: 43, accuracy: 42, spin: 42, consistency: 42, focus: 42 }, ballHook: 0.8, line: 'Gobble gobble. Three strikes coming up.' }
       ] },
-    { id: 5, title: 'Pro Tour Qualifier', alley: 'qualifier', intro: 'Coach Hal: "Sport patterns now - flatter oil, less forgiveness. Match your ball to the pattern and stay focused."',
-      opponents: [{ pro: 'pike', line: 'Spares win championships, kid.' }, { pro: 'vale', line: 'Ever bowled against a lefty? Good luck.' }, { pro: 'marlow', line: 'Let\'s give the crowd a show!' }, { rival: 'qualifier' }] },
-    { id: 6, title: 'PBA Champion', alley: 'stadium', intro: 'Coach Hal: "The championship stepladder. Win the stepladder, then the title final. And guess who climbed the tour to meet you there? Brock."',
-      opponents: [{ pro: 'brightwater', line: 'Age is just a number. So is my average.' }, { pro: 'halloran', line: 'Nobody grinds harder than me.' }, { pro: 'ashgrove', line: 'Two hands, one goal. Show me what you\'ve got, mate.' }, { rival: 'champion', final: true }],
+    { id: 5, title: 'Pro Tour Qualifier', alley: 'qualifier', gate: 200, intro: 'Coach Hal: "Sport patterns now - flatter oil, less forgiveness. Match your ball to the pattern and stay focused."',
+      // v0.8.1: story-only stat copies (`stats` on the entry). D.PROS / D.RIVAL.forms keep their original stats for rankings, leaderboards and AI lists.
+      opponents: [{ pro: 'pike', line: 'Spares win championships, kid.', stats: { power: 47, accuracy: 69, spin: 38, consistency: 66, focus: 59 } },
+        { pro: 'vale', line: 'Ever bowled against a lefty? Good luck.', stats: { power: 62, accuracy: 54, spin: 72, consistency: 54, focus: 57 } },
+        { pro: 'marlow', line: 'Let\'s give the crowd a show!', stats: { power: 72, accuracy: 59, spin: 76, consistency: 57, focus: 69 } },
+        { rival: 'qualifier', stats: { power: 67, accuracy: 58, spin: 67, consistency: 57, focus: 58 } }] },
+    { id: 6, title: 'PBA Champion', alley: 'stadium', gate: 270, intro: 'Coach Hal: "The championship stepladder. Win the stepladder, then the title final. And guess who climbed the tour to meet you there? Brock."',
+      opponents: [{ pro: 'brightwater', line: 'Age is just a number. So is my average.', stats: { power: 84, accuracy: 81, spin: 84, consistency: 74, focus: 76 } },
+        { pro: 'halloran', line: 'Nobody grinds harder than me.', stats: { power: 97, accuracy: 90, spin: 88, consistency: 100, focus: 95 } },
+        { pro: 'ashgrove', line: 'Two hands, one goal. Show me what you\'ve got, mate.', stats: { power: 95, accuracy: 93, spin: 109, consistency: 95, focus: 103 } },
+        { rival: 'champion', final: true, stats: { power: 106, accuracy: 101, spin: 115, consistency: 101, focus: 106 } }],
       outro: 'Coach Hal: "From house ball to champion. I always knew you had it in you! The Endless Pro Tour awaits."' }
   ];
 
@@ -482,7 +493,10 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     }
   };
   const MENTOR = { id: 'quimby', name: 'Coach Hal Quimby', consoleBrock: 'Coach Hal: "Don\'t let Brock rattle you. I lost my first forty matches! Every great bowler loses. Train hard and you\'ll beat him next time."',
-    finalWin: 'Coach Hal: "From house ball to champion - and you did it with class. I\'m proud of you."' };
+    finalWin: 'Coach Hal: "From house ball to champion - and you did it with class. I\'m proud of you."',
+    // v0.8.1 chapter gate + consolation tip (kid-friendly, never punishing)
+    gate: 'Coach Hal: "{title} opens at Bowler Rating {gate} - you\'re at {rating}. Keep practicing! Drills at the Practice Alley and League Night make your stats grow fast."',
+    tip: 'Coach Hal: "Tough one! Every great bowler has days like this. Try the {drill} drill at the Practice Alley - it builds {stats}. You\'ll get {name} next time!"' };
   // Special shots: unlockable, levelable (1-10), limited equip slots. Trigger occasionally in auto-play.
   const SKILLS = {
     iron_spare: { name: 'Iron Spare', icon: '🛡️', when: 'spare', base: 0.12, per: 0.03, unlockChapter: 0, desc: 'Sometimes locks in a non-split spare.' },
@@ -525,12 +539,12 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.8.0';
+  const APP_VERSION = '0.8.1';
   const TUTORIAL = {
     reward: 100,
     steps: [
       { id: 'stats', screen: 'hub', target: ['[data-go=stats]'], text: 'You don\'t aim the ball - the game bowls for you! Your 5 stats decide every roll: 💪 Power, 🎯 Accuracy, 🌀 Spin, 📏 Consistency and 🧠 Focus.' },
-      { id: 'xp', screen: 'hub', target: ['.topbar .pill:not(.gem)', '[data-go=training]'], text: 'Every match gives your stats XP and earns 🪙 coins, win or lose. Want a stat to grow faster? Train it with drills at the Practice Alley.' },
+      { id: 'xp', screen: 'hub', target: ['.topbar .pill:not(.gem)', '[data-go=training]'], text: 'Every match gives your stats XP and earns 🪙 coins, win or lose. Want a stat to grow faster? Train it with drills - they also open new story chapters!' },
       { id: 'gear', screen: 'hub', target: ['[data-go=shop]', '[data-go=gear]', '[data-go=guide]'], text: 'Spend coins on balls and gear at the Pro Shops, then equip them in My Gear. Match your ball to the oil: the Lane Guide shows how.' },
       { id: 'story', screen: 'hub', target: ['[data-go=story]'], action: true, text: 'Enough talk - let\'s bowl! Tap Story to start your career.', altText: 'Story mode takes you from rookie to PBA Champion. On the scorecard, X is a strike (all 10 pins with one ball) and / is a spare (all 10 with two).', altSkipTo: 'daily' },
       { id: 'storyBowl', screen: 'story', target: ['#story button.green[data-ch]'], action: true, backTo: 'story', text: 'This is Chapter 1. Tap Bowl! to play your very first match.' },
@@ -803,7 +817,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
       version: 2, name: (name || 'Rookie').slice(0, 16), coins: 300, gems: 0, stats,
       inventory: ['house_ball', 'shoe_rental', 'bag_tote'], consumables: { rosin: 1, cleaner: 1 },
       equipped: { ball: 'house_ball', shoes: 'shoe_rental', bag: 'bag_tote' }, ballCondition: { house_ball: 1 },
-      xpBoost: 0, story: { chapter: 1, beaten: 0 }, pvp: { rating: 1000, wins: 0, losses: 0 }, best: 0, matches: 0, wins: 0, history: [],
+      xpBoost: 0, story: { chapter: 1, beaten: 0, open: 1 }, pvp: { rating: 1000, wins: 0, losses: 0 }, best: 0, matches: 0, wins: 0, history: [],
       tutorial: { status: 'new', step: 0, tips: true, seen: {}, offered: true, rewarded: false }
     });
   }
@@ -829,6 +843,9 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     p.createdAt = p.createdAt || Date.now();
     p.referral = p.referral || { claim: null, qualified: false, credited: [], tiers: [], gemsEarned: 0, extra: 0 };
     lbEnsure(p);   // v0.8 leaderboard rewards
+    // v0.8.1 chapter gates. Saves from before v0.8.1 keep every chapter they could already reach (never lock anyone out mid-story).
+    if (p.story.open == null) p.story.open = p.story.chapter;
+    if (!p.story.loss) p.story.loss = { key: null, n: 0 };
     return p;
   }
   // ---------- Tutorial (status: new -> active -> done | skipped; legacy = old save; declined = said no to the offer) ----------
@@ -850,6 +867,32 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   function setTips(p, on) { migrate(p); p.tutorial.tips = !!on; }
   const baseStats = p => { const o = {}; D.STATS.forEach(k => (o[k] = p.stats[k].level)); return o; };
   const chaptersCleared = p => p.story.chapter - 1;
+  // ---------- Story chapter gates (v0.8.1) ----------
+  // A chapter's gate is the Bowler Rating (sum of base stat levels, gear not counted) needed to START it. Once a chapter is open it
+  // stays open (p.story.open = highest chapter entered); old saves are grandfathered in migrate().
+  const bowlerRating = p => rating(baseStats(p));
+  const chapterGate = chId => { const ch = D.STORY[chId - 1]; return (ch && ch.gate) || 0; };
+  function chapterOpen(p, chId) {
+    migrate(p); if (chId < p.story.chapter) return true; if (chId > p.story.chapter) return false;
+    if (chId <= p.story.open || p.story.beaten > 0) return true;
+    if (bowlerRating(p) >= chapterGate(chId)) { p.story.open = chId; return true; }
+    return false;
+  }
+  function gateInfo(p, chId) {
+    const gate = chapterGate(chId), r = bowlerRating(p), open = chapterOpen(p, chId);
+    return { chapter: chId, gate, rating: r, open, need: Math.max(0, gate - r), pct: open || !gate ? 1 : Math.max(0, Math.min(1, r / gate)) };
+  }
+  function gateMessage(p, chId) { const g = gateInfo(p, chId), ch = D.STORY[chId - 1];
+    return D.MENTOR.gate.replace('{title}', 'Chapter ' + chId + ': ' + ch.title).replace('{gate}', g.gate).replace('{rating}', g.rating); }
+  // Consolation tip after 3 straight story losses to the same opponent: suggest the unlocked drill that trains the stat with the biggest gap.
+  function consolationTip(p, op) {
+    const me = baseStats(p), them = opponentBowler(op).stats; let k = D.STATS[0], gap = -1e9;
+    D.STATS.forEach(s => { const g = (them[s] || 0) - me[s]; if (g > gap) { gap = g; k = s; } });
+    let best = null, w = -1; D.DRILLS.filter(d => isUnlocked(p, d)).forEach(d => { const x = d.stats[k] || 0; if (x >= w) { w = x; best = d; } });
+    if (!best) return null;
+    const stats = Object.keys(best.stats).map(s => D.STAT_INFO[s].label).join(', ');
+    return { drill: best.id, stat: k, text: D.MENTOR.tip.replace('{drill}', best.name).replace('{stats}', stats).replace('{name}', opponentBowler(op).name) };
+  }
   function isUnlocked(p, what) { return chaptersCleared(p) >= (what.unlockChapter || 0); }
   // ---------- Premium gear (gems or coins; see D.PREMIUM_GEAR) ----------
   const bonusSum = it => Object.values(it.bonus || {}).reduce((a, v) => a + v, 0);
@@ -922,11 +965,12 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   function opponentBowler(op) {
     if (op.rival) {
       const R = D.RIVAL, F = R.forms[op.rival];
-      return { isBowler: true, isRival: true, form: op.rival, name: R.name, nick: R.nick, stats: Object.assign({}, F.stats), ballHook: F.ballHook, spareBonus: 0.03,
+      // v0.8.1: a story entry may carry its own story-only stats; D.RIVAL.forms / D.PROS stay untouched for rankings and AI lists.
+      return { isBowler: true, isRival: true, form: op.rival, name: R.name, nick: R.nick, stats: Object.assign({}, op.stats || F.stats), ballHook: F.ballHook, spareBonus: 0.03,
         skills: [{ id: R.signature, level: F.skill }], pro: { look: R.look, nick: R.nick, style: R.style }, lines: F };
     }
     const src = op.pro ? D.PROS.find(x => x.id === op.pro) : op;
-    return { isBowler: true, name: src.name, stats: Object.assign({}, src.stats), ballHook: src.ballHook || 0.7, spareBonus: 0.03, pro: op.pro ? src : null };
+    return { isBowler: true, name: src.name, stats: Object.assign({}, op.stats || src.stats), ballHook: src.ballHook || 0.7, spareBonus: 0.03, pro: op.pro ? src : null };
   }
 
   // Full match. opts: {fairPlay, useRosin, scripted (forced loss), patternId (override), gameIndex}
@@ -967,8 +1011,15 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     p.coins += r.coins; p.matches++; if (result.win) p.wins++;
     p.best = Math.max(p.best, result.player.total);
     const bc = p.ballCondition[p.equipped.ball]; p.ballCondition[p.equipped.ball] = Math.max(0.6, (bc == null ? 1 : bc) - 0.05);
-    let storyMsg = null, champion = false, gemsEarned = 0, rewardItems = [];
-    if (mode === 'story' && (result.win || result.scripted)) {
+    let storyMsg = null, champion = false, gemsEarned = 0, rewardItems = [], tip = null;
+    const curCh = D.STORY[p.story.chapter - 1], isCurOpp = mode === 'story' && !!curCh && opts.oppIndex === p.story.beaten && opts.oppIndex >= 0;
+    const gated = isCurOpp && !chapterOpen(p, curCh.id);   // safety net: the story screen never offers a gated match
+    if (isCurOpp && !gated && !result.scripted) {   // consolation tip streak (same opponent, consecutive losses)
+      const key = curCh.id + ':' + opts.oppIndex;
+      if (result.win) p.story.loss = { key: null, n: 0 };
+      else { p.story.loss = p.story.loss && p.story.loss.key === key ? { key, n: p.story.loss.n + 1 } : { key, n: 1 }; if (p.story.loss.n % 3 === 0) tip = consolationTip(p, curCh.opponents[opts.oppIndex]); }
+    }
+    if (mode === 'story' && !gated && (result.win || result.scripted)) {
       const ch = D.STORY[p.story.chapter - 1];
       if (ch && opts.oppIndex === p.story.beaten) {
         p.story.beaten++;
@@ -982,7 +1033,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     p.ads.sinceInterstitial++;
     p.history.unshift({ mode, opp: result.oppName, me: result.player.total, them: result.opponent.total, win: result.win });
     p.history = p.history.slice(0, 20);
-    return { xp, coins: r.coins, ups, storyMsg, champion, counts: c, gemsEarned, rewardItems };
+    return { xp, coins: r.coins, ups, storyMsg, champion, counts: c, gemsEarned, rewardItems, tip, gated };
   }
   // Practice drills (mentor-unlocked). drillScore 0..1.
   const drillById = id => D.DRILLS.find(d => d.id === id);
@@ -1300,7 +1351,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   function save(p, storage) { (storage || localStorage).setItem(SAVE_KEY, JSON.stringify(p)); }
   function load(storage) { try { const st = storage || localStorage; const s = st.getItem(SAVE_KEY) || st.getItem(LEGACY_SAVE_KEY); return s ? migrate(JSON.parse(s)) : null; } catch (e) { return null; } }
 
-  return { SAVE_KEY, LEGACY_SAVE_KEY, ENTITLEMENT_KEY, RACK, makeRng, xpToNext, addStatXp, rating, scoreGame, frameMarks, isGameComplete, nextRollInfo, isSplit, PIN_POS,
+  return { bowlerRating, chapterGate, chapterOpen, gateInfo, gateMessage, consolationTip, SAVE_KEY, LEGACY_SAVE_KEY, ENTITLEMENT_KEY, RACK, makeRng, xpToNext, addStatXp, rating, scoreGame, frameMarks, isGameComplete, nextRollInfo, isSplit, PIN_POS,
     patternById, alleyPattern, forgiveness, breakdownShift, idealHook, recommendBall, laneFit, effectiveDifficulty,
     ballById, gearById, ballProfile, gearBonus, effectiveStats, skillChance, simulateRoll, simulateGame, newPlayer, migrate, baseStats,
     chaptersCleared, isUnlocked, buy, equip, premById, bonusSum, premiumBaseline, premiumCapOk, premiumEdge, buyPremiumGear, grantStoryPremium, boostsLeft, buyPremiumItem, streakGems, dailyGemsFree, daysToEarnGems, bagCarry, altBallHook, playerBowler, opponentBowler, playMatch, matchRewards, countEvents, applyMatch, drillById, train, cleanBall,
@@ -2414,16 +2465,24 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     let html = topbar() + '<h2>📖 Story: Rookie to Champion</h2>';
     D.STORY.forEach(ch => {
       const locked = ch.id > P.story.chapter, cleared = ch.id < P.story.chapter, alley = D.ALLEYS[ch.alley], pat = C.alleyPattern(ch.alley);
-      html += `<div class="card ${locked ? 'locked' : ''}"><div class="row"><b class="grow">Ch ${ch.id}: ${ch.title}</b>${cleared ? '<span class="tag ok">Cleared</span>' : locked ? '<span class="tag warn">🔒 Locked</span>' : '<span class="tag">Current</span>'}</div><div class="muted">${alley.name} · ${esc(pat.name)} <span class="tag ${pat.kind}">${pat.kind}</span></div>`;
+      // v0.8.1 chapter gate: the current chapter can be "reached" but still need a Bowler Rating to start.
+      const g = !locked && !cleared ? C.gateInfo(P, ch.id) : null, gated = !!g && !g.open;
+      html += `<div class="card ${locked ? 'locked' : ''}" ${gated ? 'id="storyGate"' : ''}><div class="row"><b class="grow">Ch ${ch.id}: ${ch.title}</b>${cleared ? '<span class="tag ok">Cleared</span>' : locked ? '<span class="tag warn">🔒 Locked</span>' : gated ? '<span class="tag warn">🔒 Rating ' + g.gate + '</span>' : '<span class="tag">Current</span>'}</div><div class="muted">${alley.name} · ${esc(pat.name)} <span class="tag ${pat.kind}">${pat.kind}</span>${locked && ch.gate ? ' · opens at Bowler Rating ' + ch.gate : ''}</div>`;
+      if (gated) {
+        html += dialog(hal().look, esc(C.gateMessage(P, ch.id))) + `<div class="gatebox"><div class="row"><b class="grow">⭐ Bowler Rating ${g.rating} / ${g.gate}</b><span class="muted">${g.need} to go</span></div><div class="bar gatebar" style="margin:6px 0"><i style="width:${Math.round(g.pct * 100)}%"></i></div>
+          <div class="muted">Your Bowler Rating is the sum of your 5 stats (gear doesn't count). Every match, drill and League Night adds XP.</div>
+          <div class="row" style="gap:8px;margin-top:8px"><button class="btn small green" id="gateTrain">🏋️ Practice drills</button><button class="btn small blue" id="gateLeague">🛡️ League Night</button></div></div>`;
+      }
       if (!locked) {
         html += dialog(hal().look, esc(ch.intro));
-        ch.opponents.forEach((o, i) => { const ob = C.opponentBowler(o); const beaten = cleared || i < P.story.beaten; const avail = !cleared && i === P.story.beaten;
+        ch.opponents.forEach((o, i) => { const ob = C.opponentBowler(o); const beaten = cleared || i < P.story.beaten; const avail = !cleared && !gated && i === P.story.beaten;
           const tags = o.rival ? `<span class="tag" style="background:#fef08a">⭐ Rival "${ob.nick}"</span>${o.final ? '<span class="tag warn">Title Final</span>' : ''}` : ob.pro ? `<span class="tag">${esc(ob.pro.nick)}</span>` : '';
           html += `<div class="row ${o.rival ? 'brock' : ''}" style="margin:6px 0;${o.rival ? 'border-radius:12px;padding:4px' : ''}"><span data-look="${esc(ob.name)}" data-pro="${o.pro || ''}" ${o.rival ? 'data-rival="1"' : ''}></span><div class="grow"><b>${esc(ob.name)}</b> ${tags}<div class="muted">${ob.pro ? esc(ob.pro.style) + ' · ' : ''}Rating ${C.rating(ob.stats)}</div></div>${beaten ? (cleared && !o.scripted ? `<button class="btn small" data-ch="${ch.id}" data-op="${i}">Rematch</button>` : '<span class="tag ok">✔</span>') : avail ? `<button class="btn small green" data-ch="${ch.id}" data-op="${i}">Bowl!</button>` : '<span class="tag">🔒</span>'}</div>`; });
       }
       html += '</div>';
     });
     $('#story').innerHTML = html; fillAvatars($('#story'));
+    if ($('#gateTrain')) { $('#gateTrain').onclick = () => show('training'); $('#gateLeague').onclick = () => show('club'); }
     $('#story').querySelectorAll('[data-ch]').forEach(b => (b.onclick = () => { const ch = D.STORY[b.dataset.ch - 1], i = +b.dataset.op, o = ch.opponents[i]; const isCur = ch.id === P.story.chapter;
       preMatch({ mode: 'story', op: o, oppIndex: isCur ? i : -1, alley: ch.alley, scripted: !!(o.scripted && isCur), final: !!o.final, line: o.rival ? D.RIVAL.forms[o.rival].pre : o.line }); }));
   };
@@ -2921,7 +2980,9 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
       if (nowUnlocked.length || drills.length || skills.length || pats.length) extra += `<p>🔓 Unlocked: <b>${[...nowUnlocked, ...drills.map(x => 'Drill: ' + x.name), ...skills.map(x => 'Special: ' + x.name), ...pats.map(x => 'Pattern: ' + x.name)].join(', ')}</b></p>`;
       if (drills.length) extra += dialog(hal().look, `Coach Hal: "New drill: ${esc(drills[0].name)}. ${esc(drills[0].hal)}"`);
       if (rw.champion) extra += `<p class="banner">🏆 YOU ARE THE PBA CHAMPION! 🏆</p>` + dialog(hal().look, esc(D.MENTOR.finalWin)) + `<p class="muted">${esc(D.STORY[5].outro)}</p>`;
+      else if (!C.chapterOpen(P, P.story.chapter)) { const g = C.gateInfo(P, P.story.chapter); extra += `<p class="muted">⭐ Next up: Chapter ${g.chapter} opens at Bowler Rating ${g.gate} (you're at ${g.rating}). Practice drills and League Night will get you there!</p>`; }
     }
+    if (rw.tip) extra += `<div id="consoleTip">${dialog(hal().look, esc(rw.tip.text))}</div>`;
     AU.stinger(rw.champion ? 'champion' : res.win ? 'win' : 'loss', 'menu', rw.champion ? 5200 : 3400); if (ups) sfx('levelup', { delay: rw.champion ? 2.6 : 1.7 });
     const canRew = C.canWatchRewarded(P, now());
     modal(`<h2>${res.win ? '🏆 You win!' : '😅 So close!'}</h2><p style="font-size:22px;text-align:center"><b>${res.player.total}</b> – ${res.opponent.total}</p><p>+${rw.xp} XP to every stat · +${rw.coins} coins${cfg.mode === 'pvp' ? (cfg.online ? ' · ranked result saving online...' : cfg.unranked ? ' · unranked' : ` · PvP rating ${P.pvp.rating}`) : ''}${rw.counts.specials ? ` · ${rw.counts.specials} special shot(s)` : ''}</p>${ups ? `<p class="tag ok" style="display:block;padding:6px">LEVEL UP: ${ups}</p>` : ''}${extra}`,
