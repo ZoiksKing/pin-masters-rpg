@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.7.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.7.1"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -496,7 +496,7 @@ button,.btn,select{min-height:44px}
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.7.0';
+  const APP_VERSION = '0.7.1';
   const TUTORIAL = {
     reward: 100,
     steps: [
@@ -509,7 +509,7 @@ button,.btn,select{min-height:44px}
       { id: 'afterMatch', screen: 'story', text: 'Good effort! Even when you lose you still earn XP and coins. Brock always wins the first time - beat him in a rematch later and make him eat his words!', textWin: 'What a start! Matches give XP and coins, and wins move you through the story.' },
       { id: 'daily', screen: 'hub', target: ['[data-go=daily]'], text: 'Check Daily every day for challenges and coin rewards. Come back day after day to grow your 🔥 streak bonus.' },
       { id: 'skills', screen: 'hub', target: ['[data-go=skills]'], text: 'Special Shots pop up now and then during a match for a big result. Equip them and upgrade them with coins.' },
-      { id: 'club', screen: 'hub', target: ['[data-go=club]'], text: 'Join or start a Club, then bowl League Night. Every pin you knock down helps your club climb the weekly table.' },
+      { id: 'club', screen: 'hub', target: ['[data-go=club]'], text: 'Join or start a Club, then bowl League Night (once per day). Every pin you knock down helps your club climb the weekly table.' },
       { id: 'pvp', screen: 'hub', target: ['[data-go=pvp]', '[data-go=leaderboard]'], text: 'Ready for a challenge? Battle rivals in PvP and climb the Leaderboard.' },
       { id: 'settings', screen: 'hub', target: ['#hub .sndbtn', '[data-go=settings]'], last: true, text: 'Tap 🔊 or Settings to change sound and music. You can replay this tour in Settings anytime. Now go become a champion!' }
     ],
@@ -521,7 +521,7 @@ button,.btn,select{min-height:44px}
       guide: 'Short oil = less hook, so aim matters. Long or heavy oil = use a stronger ball.',
       skills: 'Equip your best Special Shots. A third slot opens after Chapter 4.',
       daily: 'Claim your streak bonus every day, and finish challenges for extra coins.',
-      club: 'Pick a club, then bowl League Night. Rewards pay out every week.',
+      club: 'Pick a club, then bowl League Night once per day. Rewards pay out every week.',
       leaderboard: 'Your Rating is the sum of your stats. Train and win to climb!',
       friends: 'Invite friends with your code. When a friend finishes 3 matches you both get gems. Inviting is optional - you never need it to progress.',
       style: 'Outfits, ball designs and celebrations only change how you look, not your stats.',
@@ -791,6 +791,8 @@ button,.btn,select{min-height:44px}
     p.entitlements = p.entitlements || { removeAds: false };
     p.purchases = p.purchases || { tx: [] }; p.privacy = p.privacy || { ageGroup: null };
     p.seen = p.seen || {}; p.version = 2; p.boosts = p.boosts || { date: null, xp: 0 };
+    // v0.7.1: League Night once per local calendar day. Stored on the profile (not the club) so leaving/rejoining can't reset it.
+    if (p.lastLeagueDay === undefined) p.lastLeagueDay = null;
     // Saves from before v0.4 have no tutorial flag: never force the full tour on them; offer it once and turn on contextual tips.
     if (!p.tutorial) p.tutorial = { status: 'legacy', step: 0, tips: true, seen: {}, offered: false, rewarded: false };
     p.tutorial.seen = p.tutorial.seen || {};
@@ -1019,7 +1021,13 @@ button,.btn,select{min-height:44px}
     p.coins += reward; p.club.lastResult = { week: p.club.week, rank: mine.rank, reward }; p.club.week = weekKey(now); p.club.myPins = 0; return p.club.lastResult;
   }
   // League Night: a 3-game series (carrydown builds game to game) that counts toward the club's weekly pins.
+  // Once per calendar day (local date, same rule as dailyCheck). Next reset is local midnight.
+  function leagueAvailable(p, now) { migrate(p); return p.lastLeagueDay !== dateStr(now || new Date()); }
+  function nextLeagueReset(now) { const d = now || new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1); }
   function leagueNight(p, seed, now) {
+    now = now || new Date();
+    if (!leagueAvailable(p, now)) return { ok: false, msg: 'League Night done for today - come back tomorrow', next: nextLeagueReset(now) };
+    p.lastLeagueDay = dateStr(now);
     const alleys = Object.keys(D.ALLEYS).filter(a => a !== 'practice' && isUnlocked(p, D.ALLEYS[a])); const alleyId = alleys[alleys.length - 1];
     const games = []; const me = playerBowler(p); const alley = D.ALLEYS[alleyId];
     for (let g = 0; g < 3; g++) games.push(simulateGame(me, { difficulty: alley.difficulty, pattern: patternById(alley.pattern), rng: makeRng(seed + g), gameIndex: g }).total);
@@ -1027,7 +1035,7 @@ button,.btn,select{min-height:44px}
     if (p.club) { clubCheck(p, now); p.club.myPins += series; }
     dailyCheck(p, now); recordDaily(p, 'league', 1); recordDaily(p, 'games', 3);
     const xp = 40 + Math.round(series / 10); D.STATS.forEach(k => addStatXp(p.stats[k], xp)); p.coins += 60;
-    return { games, series, alley: alleyId, xp, coins: 60 };
+    return { ok: true, games, series, alley: alleyId, xp, coins: 60 };
   }
 
   // ---------- Cosmetics (no stat effect) ----------
@@ -1151,7 +1159,7 @@ button,.btn,select{min-height:44px}
     ballById, gearById, ballProfile, gearBonus, effectiveStats, skillChance, simulateRoll, simulateGame, newPlayer, migrate, baseStats,
     chaptersCleared, isUnlocked, buy, equip, premById, bonusSum, premiumBaseline, premiumCapOk, premiumEdge, buyPremiumGear, grantStoryPremium, boostsLeft, buyPremiumItem, streakGems, dailyGemsFree, daysToEarnGems, bagCarry, altBallHook, playerBowler, opponentBowler, playMatch, matchRewards, countEvents, applyMatch, drillById, train, cleanBall,
     skillSlots, skillUpgradeCost, unlockSkills, upgradeSkill, toggleSkill, dateStr, dailyCheck, recordDaily, streakBonus, claimStreak, claimChallenge,
-    weekKey, JOINABLE, createClub, joinClub, leaveClub, clubTable, clubCheck, leagueNight, cosById, buyCosmetic, equipCosmetic,
+    weekKey, JOINABLE, createClub, joinClub, leaveClub, clubTable, clubCheck, leagueNight, leagueAvailable, nextLeagueReset, cosById, buyCosmetic, equipCosmetic,
     refNormalize, refValidCode, refWindowOpen, refDaysLeft, refCanEnter, refApplyClaim, refMatchesLeft, refFriendReady, refMarkQualified, refCredit, refRewarded, refMaxGems, refShare,
     shouldShowInterstitial, markInterstitialShown, bannerVisible, canWatchRewarded, grantRewarded, purchaseRemoveAds, restorePurchases,
     generateRivals, leaderboard, tierOf, save, load, eloAfter, ELO_K, cardFromPlayer, cardToBowler, hashStr, grantGemPack, ageGroupOf, setAgeGroup, adTreatment, data: D,
@@ -2171,7 +2179,7 @@ button,.btn,select{min-height:44px}
     const dailyReady = P.daily.challenges.some(c => !c.claimed && c.progress >= D.CHALLENGES.find(x => x.id === c.id).target) || !P.daily.streakClaimed;
     const B = (go, ic, label, cls, dot) => `<button class="btn big ${cls}" data-go="${go}"><span class="ic">${ic}</span>${label}${dot ? ' 🔴' : ''}</button>`;
     $('#hub').innerHTML = topbar() + `<div class="card row"><span id="hubAv"></span><div class="grow"><b>${done ? '🏆 PBA Champion!' : 'Chapter ' + ch.id + ': ' + ch.title}</b><div class="muted">${P.wins} wins · ${P.matches} matches · best ${P.best} · 🔥 ${P.daily.streak}-day streak</div></div></div>
-    <div class="grid3">${B('story', '📖', 'Story', 'orange')}${B('pvp', '⚔️', 'PvP (sim)', 'blue')}${B('training', '🏋️', 'Practice', 'green')}${B('daily', '📅', 'Daily', 'pink', dailyReady)}${B('club', '🛡️', 'Club & League', '')}${B('skills', '💥', 'Special Shots', 'orange')}${B('shop', '🛍️', 'Pro Shops', 'pink')}${B('style', '👕', 'Style Shop', 'blue')}${B('gear', '🎒', 'My Gear', 'green')}${B('guide', '🛢️', 'Lane Guide', '')}${B('alleys', '🗺️', 'Alleys', 'orange')}${B('stats', '📊', 'Stats', 'green')}</div>
+    <div class="grid3">${B('story', '📖', 'Story', 'orange')}${B('pvp', '⚔️', 'PvP (sim)', 'blue')}${B('training', '🏋️', 'Practice', 'green')}${B('daily', '📅', 'Daily', 'pink', dailyReady)}${B('club', '🛡️', 'Club & League', '', !!P.club && C.leagueAvailable(P, now()))}${B('skills', '💥', 'Special Shots', 'orange')}${B('shop', '🛍️', 'Pro Shops', 'pink')}${B('style', '👕', 'Style Shop', 'blue')}${B('gear', '🎒', 'My Gear', 'green')}${B('guide', '🛢️', 'Lane Guide', '')}${B('alleys', '🗺️', 'Alleys', 'orange')}${B('stats', '📊', 'Stats', 'green')}</div>
     <div class="grid3" style="margin-top:8px">${B('leaderboard', '🏅', 'Leaderboard', '')}${B('friends', '🤝', 'Friends', 'green', !!pendingRef() && !P.referral.claim && C.refWindowOpen(P, now().getTime()))}${B('settings', '⚙️', 'Settings', 'blue')}</div>
     <p class="muted" style="text-align:center">Prototype v${D.APP_VERSION} · saves to this device · <a href="#" id="resetLink">reset save</a></p>`;
     $('#hubAv').appendChild(avatar(playerLook(), 52));
@@ -2392,6 +2400,9 @@ button,.btn,select{min-height:44px}
     $('#daily').querySelectorAll('[data-claim]').forEach(b => (b.onclick = () => { const sw = P.daily.sweep; const n = C.claimChallenge(P, b.dataset.claim); toast('+' + n + ' coins!' + (!sw && P.daily.sweep ? ' All 3 done: +' + D.GEM_INCOME.challengeSweep + ' gems!' : '')); sfx('coin'); persist(); RENDER.daily(); }));
   };
   // ---------- Club & League ----------
+  // League Night countdown to local midnight (v0.7.1). Updates live while the Club screen is open.
+  function leagueLeft() { const ms = Math.max(0, C.nextLeagueReset(now()) - now()); const h = Math.floor(ms / 3600000), m = Math.ceil((ms % 3600000) / 60000); return m === 60 ? `${h + 1}h 0m` : `${h}h ${m}m`; }
+  setInterval(() => { if (current !== 'club' || !P || !P.club) return; const el = document.querySelector('#leagueReset .cd'); if (C.leagueAvailable(P, now())) { if (el) RENDER.club(); } else if (el) el.textContent = leagueLeft(); }, 20000);
   RENDER.club = () => {
     let html = topbar() + `<div class="banner">Clubs, members and rival clubs are SIMULATED on your device (no networking, no chat).</div>`;
     if (!P.club) {
@@ -2407,9 +2418,9 @@ button,.btn,select{min-height:44px}
     const rows = C.clubTable(P, now());
     html += `<h2>${P.club.emblem} ${esc(P.club.name)}</h2><div class="card"><b>Members</b><table class="lb"><tr><th>Bowler</th><th>Avg</th></tr><tr class="you"><td>${esc(P.name)} (You)</td><td>${P.best || '-'}</td></tr>${P.club.members.map(m => `<tr><td>${esc(m.name)}</td><td>${m.avg}</td></tr>`).join('')}</table></div>
       <div class="card"><b>🏆 Weekly League · week of ${P.club.week}</b><div class="muted">Your pins this week: ${P.club.myPins}. All your games add to the club total. Rewards pay out when the week rolls over.</div><table class="lb"><tr><th>#</th><th>Club</th><th>Pins</th></tr>${rows.map(r => `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${r.emblem} ${esc(r.name)}</td><td>${r.pins}</td></tr>`).join('')}</table>${P.club.lastResult ? `<div class="muted">Last week: #${P.club.lastResult.rank} (+${P.club.lastResult.reward} coins)</div>` : ''}</div>
-      <button class="btn green" id="leagueNight">🎳 Bowl League Night (3-game series)</button><p class="muted">League night is a 3-game series on your newest alley - the oil keeps breaking down game to game.</p><button class="btn small gray" id="leaveClub">Leave club</button>`;
+      ${C.leagueAvailable(P, now()) ? `<button class="btn green" id="leagueNight">🎳 Bowl League Night (3-game series)</button>` : `<div class="card" id="leagueReset" style="text-align:center"><b>⏳ Next League Night in <span class="cd">${leagueLeft()}</span></b><div class="muted">Resets at midnight (${C.nextLeagueReset(now()).toLocaleDateString(undefined, { weekday: 'short' })} 12:00 AM)</div></div><button class="btn gray" id="leagueNight" disabled>✅ League Night done for today - come back tomorrow</button>`}<p class="muted">League night is a 3-game series on your newest alley, once per day - the oil keeps breaking down game to game.</p><button class="btn small gray" id="leaveClub">Leave club</button>`;
     $('#club').innerHTML = html;
-    $('#leagueNight').onclick = () => { const r = C.leagueNight(P, Date.now() >>> 0, now()); persist(); modal(`<h2>League Night</h2><p>${C.alleyPattern(r.alley).name}: <b>${r.games.join(' · ')}</b></p><p>Series <b>${r.series}</b> added to ${esc(P.club.name)}. +${r.xp} XP to every stat, +${r.coins} coins.</p><p class="muted">Carrydown builds across all 3 games, so later games are harder to read.</p>`, [{ label: 'OK', fn: () => RENDER.club() }]); };
+    $('#leagueNight').onclick = () => { const r = C.leagueNight(P, Date.now() >>> 0, now()); if (!r.ok) { toast(r.msg); RENDER.club(); return; } persist(); modal(`<h2>League Night</h2><p>${C.alleyPattern(r.alley).name}: <b>${r.games.join(' · ')}</b></p><p>Series <b>${r.series}</b> added to ${esc(P.club.name)}. +${r.xp} XP to every stat, +${r.coins} coins.</p><p class="muted">Carrydown builds across all 3 games, so later games are harder to read.</p>`, [{ label: 'OK', fn: () => RENDER.club() }]); };
     $('#leaveClub').onclick = () => { C.leaveClub(P); persist(); RENDER.club(); };
   };
   // ---------- Friends: invite with a friend code (v0.6) ----------
