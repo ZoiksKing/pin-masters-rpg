@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.6.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.7.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -110,6 +110,8 @@ button,.btn,select{min-height:44px}
 .tierN{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#fde68a;font-weight:900;font-size:14px;flex:none}
 .tier.done .tierN{background:#86efac}
 #refIn{text-transform:uppercase;letter-spacing:5px;text-align:center;font-weight:900;font-family:ui-monospace,Menlo,Consolas,monospace}
+.tier-badge{display:inline-block;color:#fff;font-size:13px;font-weight:800;padding:3px 10px;border-radius:999px;letter-spacing:.3px}
+.col-btns{display:flex;flex-direction:column;gap:4px;align-items:stretch}.prem-item{border-left:4px solid #a855f7}
 </style></head>
 <body><div id="app">
 <section class="screen" id="create"></section><section class="screen" id="hub"></section><section class="screen" id="story"></section>
@@ -167,7 +169,7 @@ button,.btn,select{min-height:44px}
       iosApiKey: '',       // starts with appl_
       entitlement: 'no_ads',
       products: {
-        removeAds: 'remove_ads',                                   // non-consumable, $2.99
+        removeAds: 'remove_ads',                                   // non-consumable, $0.99
         gems: { gems_s: 'gems_small', gems_m: 'gems_medium', gems_l: 'gems_large', gems_xl: 'gems_xl' } // consumables
       }
     }
@@ -273,6 +275,40 @@ button,.btn,select{min-height:44px}
     { id: 'cleaner', slot: 'consumable', brand: 'keystone', name: 'Ball Cleaner (restores ball surface)', effect: { clean: true }, price: 60, shop: 'corner' }
   ];
 
+  // ---------- Premium gear (v0.7): gems OR coins OR story milestones ----------
+  // Fair-play rules (tests enforce them):
+  //  * Each item's total bonus is at most PREMIUM_CAP (15%) above the best coin item in the same slot that is
+  //    unlocked at the same story gate (tier.unlockChapter). Never a new stat, never a stat purchase.
+  //  * Every item can ALSO be bought with coins (gems x coinRate) and the three balls are free story rewards.
+  //  * Ranked/online PvP already runs with the Fair Play gear cap (total gear <= 15% of base rating) and
+  //    leaderboards use base stats only, so gear (gem or coin) never buys rating.
+  const PREMIUM_CAP = 0.15;
+  const PREMIUM_TIERS = {
+    pro: { label: 'Pro', icon: '🔷', unlockChapter: 2, color: '#3b82f6' },
+    elite: { label: 'Elite', icon: '💠', unlockChapter: 4, color: '#a855f7' },
+    legendary: { label: 'Legendary', icon: '👑', unlockChapter: 5, color: '#f59e0b' }
+  };
+  const PREMIUM_COIN_RATE = 40; // coin price = gems x 40 (a gem buys 15 coins in the coin pack, so coins are the long road)
+  const PREMIUM_GEAR = [
+    { id: 'pg_pro_ball', kind: 'ball', tier: 'pro', brand: 'thunderhead', name: 'Tempest Pro Hybrid', cover: 'hybrid', core: 'asymmetric', rg: 2.50, diff: 0.047, mb: 0.014, bonus: { spin: 6, accuracy: 6, consistency: 4 }, gems: 120, storyReward: 3 },
+    { id: 'pg_pro_shoes', kind: 'gear', slot: 'shoes', tier: 'pro', brand: 'keystone', name: 'Glide Pro Slide Kit', bonus: { consistency: 6, focus: 4 }, gems: 100 },
+    { id: 'pg_pro_glove', kind: 'gear', slot: 'glove', tier: 'pro', brand: 'spinlock', name: 'Pro Rev Glove', bonus: { spin: 6, power: 3 }, gems: 100 },
+    { id: 'pg_pro_wrist', kind: 'gear', slot: 'wrist', tier: 'pro', brand: 'keystone', name: 'Pro Guard Wrist Support', bonus: { accuracy: 5, consistency: 4 }, gems: 100 },
+    { id: 'pg_elite_ball', kind: 'ball', tier: 'elite', brand: 'sledge', name: 'Ironclad Elite Solid', cover: 'solid', core: 'asymmetric', rg: 2.47, diff: 0.056, mb: 0.026, bonus: { power: 12, spin: 10, consistency: 8 }, gems: 280, storyReward: 5 },
+    { id: 'pg_elite_shoes', kind: 'gear', slot: 'shoes', tier: 'elite', brand: 'meridian', name: 'Elite Swap-Heel Tour Shoes', bonus: { consistency: 10, focus: 6, accuracy: 4 }, gems: 220 },
+    { id: 'pg_elite_glove', kind: 'gear', slot: 'glove', tier: 'elite', brand: 'spinlock', name: 'Elite Vortex Glove', bonus: { spin: 10, power: 6 }, gems: 200 },
+    { id: 'pg_elite_wrist', kind: 'gear', slot: 'wrist', tier: 'elite', brand: 'meridian', name: 'Elite Lockdown Positioner', bonus: { accuracy: 9, consistency: 7 }, gems: 200 },
+    { id: 'pg_leg_ball', kind: 'ball', tier: 'legendary', brand: 'velocity', name: 'Zenith Legend Pearl', cover: 'pearl', core: 'asymmetric', rg: 2.50, diff: 0.054, mb: 0.022, bonus: { power: 11, accuracy: 9, spin: 8, consistency: 4 }, gems: 450, storyReward: 6 },
+    { id: 'pg_leg_shoes', kind: 'gear', slot: 'shoes', tier: 'legendary', brand: 'velocity', name: 'Legend Featherstep System', bonus: { consistency: 10, focus: 7, accuracy: 4 }, gems: 400 },
+    { id: 'pg_leg_glove', kind: 'gear', slot: 'glove', tier: 'legendary', brand: 'thunderhead', name: 'Legend Cyclone Glove', bonus: { spin: 11, power: 6 }, gems: 380 },
+    { id: 'pg_leg_wrist', kind: 'gear', slot: 'wrist', tier: 'legendary', brand: 'sledge', name: 'Legend Steelframe Positioner', bonus: { accuracy: 10, consistency: 7 }, gems: 380 }
+  ].map(it => Object.assign(it, { premium: true, price: it.gems * PREMIUM_COIN_RATE, unlockChapter: PREMIUM_TIERS[it.tier].unlockChapter }));
+  // Free gem income from normal play (before v0.7 gems only came from referrals and purchases).
+  // A daily player (streak + all 3 challenges) earns 15/day + 25 every 7th streak day = ~130/week.
+  const GEM_INCOME = { streakDaily: 5, streakWeekly: 25, challengeSweep: 10, chapterClear: [20, 30, 40, 60, 80, 120] };
+  // Gem boosts: XP only (never raw stats), daily-capped. Flag lets the owner switch them off.
+  const GEM_BOOSTS = { enabled: true, xpBoostPerDay: 1 };
+
   const SHOPS = {
     corner: { name: 'Corner Pro Shop', unlockChapter: 0, desc: 'Starter balls, tape and rental-upgrade shoes.' },
     regional: { name: 'Riverbend Pro Shop', unlockChapter: 2, desc: 'Reactive balls and real pro-shop drilling.' },
@@ -347,7 +383,7 @@ button,.btn,select{min-height:44px}
   // Convenience items for gems (non-cosmetic, no stat power).
   const PREMIUM_ITEMS = [
     { id: 'coins_pack', gems: 100, name: '1,500 Coins', type: 'coins', amount: 1500 },
-    { id: 'xp_boost', gems: 150, name: 'Double XP (next 3 matches)', type: 'xpboost', amount: 3 }
+    { id: 'xp_boost', gems: 150, name: 'Double XP (next 3 matches)', type: 'xpboost', amount: 3, dailyCap: true }
   ];
   // Cosmetics: the main premium items. NO stat effects. Priced in coins or gems.
   const COSMETICS = [
@@ -454,13 +490,13 @@ button,.btn,select{min-height:44px}
     { name: 'Spare Me', emblem: '🙏', avg: 128 }, { name: 'Lucky Strikes', emblem: '🍀', avg: 150 }
   ];
   const AD_CONFIG = { interstitialEvery: 3, rewardedPerDay: 5, rewardedCoinBonus: 0.5, demo: true };
-  const REMOVE_ADS = { id: 'remove_ads', sku: 'remove_ads', usd: 2.99, type: 'non-consumable', name: 'Remove Ads' };
+  const REMOVE_ADS = { id: 'remove_ads', sku: 'remove_ads', usd: 0.99, type: 'non-consumable', name: 'Remove Ads' };
 
   const RIVAL_FIRST = ['Ace', 'Bowlie', 'Pinny', 'Rolla', 'Sparky', 'Turbo', 'Lucky', 'Ziggy', 'Mango', 'Pixel', 'Nova', 'Echo', 'Comet', 'Waffles', 'Jinx'];
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.6.0';
+  const APP_VERSION = '0.7.0';
   const TUTORIAL = {
     reward: 100,
     steps: [
@@ -494,7 +530,7 @@ button,.btn,select{min-height:44px}
     }
   };
 
-  return { APP_VERSION, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, REFERRAL, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, RIVAL_FIRST, RIVAL_LAST };
+  return { APP_VERSION, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, REFERRAL, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, PREMIUM_GEAR, PREMIUM_TIERS, PREMIUM_CAP, PREMIUM_COIN_RATE, GEM_INCOME, GEM_BOOSTS, RIVAL_FIRST, RIVAL_LAST };
 });
 </script><script>/* Pin Masters RPG core logic: pure functions (no DOM) so it can be unit-tested in Node
  * and later run on a server for authoritative PvP. */
@@ -625,8 +661,9 @@ button,.btn,select{min-height:44px}
   const effectiveDifficulty = (base, pat) => base * (1 + 0.6 * (1 - forgiveness(pat)));
 
   // ---------- Equipment / effective stats ----------
-  const ballById = id => D.BALLS.find(b => b.id === id);
-  const gearById = id => D.GEAR.find(g => g.id === id);
+  const premById = id => (D.PREMIUM_GEAR || []).find(x => x.id === id);
+  const ballById = id => D.BALLS.find(b => b.id === id) || (premById(id) && premById(id).kind === 'ball' ? premById(id) : undefined);
+  const gearById = id => D.GEAR.find(g => g.id === id) || (premById(id) && premById(id).kind === 'gear' ? premById(id) : undefined);
   function ballProfile(ball, condition) {
     const c = D.COVERS[ball.cover]; const cond = condition === undefined ? 1 : condition;
     const hook = (c.friction + ball.diff * 8 + (ball.core === 'asymmetric' ? 0.1 + ball.mb * 3 : 0)) * (0.75 + 0.25 * cond);
@@ -753,7 +790,7 @@ button,.btn,select{min-height:44px}
     p.ads = p.ads || { sinceInterstitial: 0, rewardedDate: null, rewardedToday: 0, shown: 0 };
     p.entitlements = p.entitlements || { removeAds: false };
     p.purchases = p.purchases || { tx: [] }; p.privacy = p.privacy || { ageGroup: null };
-    p.seen = p.seen || {}; p.version = 2;
+    p.seen = p.seen || {}; p.version = 2; p.boosts = p.boosts || { date: null, xp: 0 };
     // Saves from before v0.4 have no tutorial flag: never force the full tour on them; offer it once and turn on contextual tips.
     if (!p.tutorial) p.tutorial = { status: 'legacy', step: 0, tips: true, seen: {}, offered: false, rewarded: false };
     p.tutorial.seen = p.tutorial.seen || {};
@@ -782,7 +819,41 @@ button,.btn,select{min-height:44px}
   const baseStats = p => { const o = {}; D.STATS.forEach(k => (o[k] = p.stats[k].level)); return o; };
   const chaptersCleared = p => p.story.chapter - 1;
   function isUnlocked(p, what) { return chaptersCleared(p) >= (what.unlockChapter || 0); }
+  // ---------- Premium gear (gems or coins; see D.PREMIUM_GEAR) ----------
+  const bonusSum = it => Object.values(it.bonus || {}).reduce((a, v) => a + v, 0);
+  const premSlot = it => (it.kind === 'ball' ? 'ball' : it.slot);
+  // Best coin item in the same slot that a player can own at this item's story gate (the cap baseline).
+  function premiumBaseline(it) {
+    const pool = it.kind === 'ball' ? D.BALLS : D.GEAR.filter(g => g.slot === it.slot);
+    return pool.filter(x => D.SHOPS[x.shop].unlockChapter <= it.unlockChapter).reduce((m, x) => Math.max(m, bonusSum(x)), 0);
+  }
+  const premiumCapOk = it => bonusSum(it) <= Math.floor(premiumBaseline(it) * (1 + D.PREMIUM_CAP));
+  const premiumEdge = it => bonusSum(it) / premiumBaseline(it) - 1;
+  // currency: 'gems' (default) or 'coins'.
+  function buyPremiumGear(p, itemId, currency) {
+    migrate(p); const it = premById(itemId); if (!it) return { ok: false, msg: 'Unknown item' };
+    if (chaptersCleared(p) < it.unlockChapter) return { ok: false, msg: 'Unlocks after Chapter ' + it.unlockChapter };
+    if (p.inventory.includes(itemId)) return { ok: false, msg: 'Already owned' };
+    if (currency === 'coins') { if (p.coins < it.price) return { ok: false, msg: 'Not enough coins' }; p.coins -= it.price; }
+    else { if (p.gems < it.gems) return { ok: false, msg: 'Not enough gems' }; p.gems -= it.gems; }
+    p.inventory.push(itemId); if (it.kind === 'ball') p.ballCondition[itemId] = 1;
+    return { ok: true, msg: 'Bought ' + it.name };
+  }
+  // Story milestone rewards: premium balls granted free when their chapter is cleared.
+  function grantStoryPremium(p, chapterId) {
+    return (D.PREMIUM_GEAR || []).filter(it => it.storyReward === chapterId && !p.inventory.includes(it.id)).map(it => { p.inventory.push(it.id); if (it.kind === 'ball') p.ballCondition[it.id] = 1; return it.id; });
+  }
+  // Gem convenience items (coins pack, XP boost). XP boost is daily-capped and behind D.GEM_BOOSTS.enabled.
+  function boostsLeft(p, now) { migrate(p); const t = dateStr(now || new Date()); if (p.boosts.date !== t) { p.boosts.date = t; p.boosts.xp = 0; } return D.GEM_BOOSTS.enabled ? Math.max(0, D.GEM_BOOSTS.xpBoostPerDay - p.boosts.xp) : 0; }
+  function buyPremiumItem(p, id, now) {
+    migrate(p); const it = D.PREMIUM_ITEMS.find(x => x.id === id); if (!it) return { ok: false, msg: 'Unknown item' };
+    if (it.type === 'xpboost' && boostsLeft(p, now) <= 0) return { ok: false, msg: D.GEM_BOOSTS.enabled ? 'Daily limit reached - come back tomorrow' : 'Not available' };
+    if (p.gems < it.gems) return { ok: false, msg: 'Not enough gems' };
+    p.gems -= it.gems; if (it.type === 'coins') p.coins += it.amount; if (it.type === 'xpboost') { p.xpBoost += it.amount; p.boosts.xp++; }
+    return { ok: true, msg: 'Got ' + it.name + '!' };
+  }
   function buy(p, itemId) {
+    if (premById(itemId)) return buyPremiumGear(p, itemId, 'coins');
     const it = ballById(itemId) || gearById(itemId);
     if (!it) return { ok: false, msg: 'Unknown item' };
     if (!isUnlocked(p, D.SHOPS[it.shop])) return { ok: false, msg: 'Shop locked' };
@@ -864,12 +935,13 @@ button,.btn,select{min-height:44px}
     p.coins += r.coins; p.matches++; if (result.win) p.wins++;
     p.best = Math.max(p.best, result.player.total);
     const bc = p.ballCondition[p.equipped.ball]; p.ballCondition[p.equipped.ball] = Math.max(0.6, (bc == null ? 1 : bc) - 0.05);
-    let storyMsg = null, champion = false;
+    let storyMsg = null, champion = false, gemsEarned = 0, rewardItems = [];
     if (mode === 'story' && (result.win || result.scripted)) {
       const ch = D.STORY[p.story.chapter - 1];
       if (ch && opts.oppIndex === p.story.beaten) {
         p.story.beaten++;
-        if (p.story.beaten >= ch.opponents.length) { storyMsg = 'Chapter cleared: ' + ch.title + '!'; p.coins += 250 * ch.id; p.story.chapter++; p.story.beaten = 0; if (ch.id === D.STORY.length) champion = true; }
+        if (p.story.beaten >= ch.opponents.length) { storyMsg = 'Chapter cleared: ' + ch.title + '!'; p.coins += 250 * ch.id;
+          gemsEarned = D.GEM_INCOME.chapterClear[ch.id - 1] || 0; p.gems += gemsEarned; rewardItems = grantStoryPremium(p, ch.id); p.story.chapter++; p.story.beaten = 0; if (ch.id === D.STORY.length) champion = true; }
       }
     }
     if (mode === 'pvp' && opts.rival) { p.pvp.rating = eloAfter(p.pvp.rating, opts.rival.elo, result.win); result.win ? p.pvp.wins++ : p.pvp.losses++; }
@@ -878,7 +950,7 @@ button,.btn,select{min-height:44px}
     p.ads.sinceInterstitial++;
     p.history.unshift({ mode, opp: result.oppName, me: result.player.total, them: result.opponent.total, win: result.win });
     p.history = p.history.slice(0, 20);
-    return { xp, coins: r.coins, ups, storyMsg, champion, counts: c };
+    return { xp, coins: r.coins, ups, storyMsg, champion, counts: c, gemsEarned, rewardItems };
   }
   // Practice drills (mentor-unlocked). drillScore 0..1.
   const drillById = id => D.DRILLS.find(d => d.id === id);
@@ -907,7 +979,7 @@ button,.btn,select{min-height:44px}
     migrate(p); const today = dateStr(now || new Date());
     if (p.daily.date === today) return { reset: false };
     p.daily.streak = p.daily.date && prevDateStr(today) === p.daily.date ? p.daily.streak + 1 : 1;
-    p.daily.date = today; p.daily.streakClaimed = false;
+    p.daily.date = today; p.daily.streakClaimed = false; p.daily.sweep = false;
     const rng = makeRng(hashStr(today)); const pool = D.CHALLENGES.slice(); const picks = [];
     while (picks.length < 3) picks.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
     p.daily.challenges = picks.map(c => ({ id: c.id, progress: 0, claimed: false }));
@@ -915,8 +987,14 @@ button,.btn,select{min-height:44px}
   }
   function recordDaily(p, type, amount) { p.daily.challenges.forEach(c => { const def = D.CHALLENGES.find(x => x.id === c.id); if (def.type === type) c.progress = Math.min(def.target, c.progress + amount); }); }
   const streakBonus = streak => 50 * Math.min(streak, 7) + (streak >= 7 ? 100 : 0);
-  function claimStreak(p) { if (p.daily.streakClaimed) return 0; p.daily.streakClaimed = true; const b = streakBonus(p.daily.streak); p.coins += b; return b; }
-  function claimChallenge(p, id) { const c = p.daily.challenges.find(x => x.id === id); const def = D.CHALLENGES.find(x => x.id === id); if (!c || c.claimed || c.progress < def.target) return 0; c.claimed = true; p.coins += def.reward; return def.reward; }
+  // Gems from daily play: 5 per streak claim, +25 on every 7th streak day, +10 for clearing all 3 challenges.
+  const streakGems = streak => D.GEM_INCOME.streakDaily + (streak > 0 && streak % 7 === 0 ? D.GEM_INCOME.streakWeekly : 0);
+  function claimStreak(p) { if (p.daily.streakClaimed) return 0; p.daily.streakClaimed = true; const b = streakBonus(p.daily.streak); p.coins += b; p.gems += streakGems(p.daily.streak); return b; }
+  function claimChallenge(p, id) { const c = p.daily.challenges.find(x => x.id === id); const def = D.CHALLENGES.find(x => x.id === id); if (!c || c.claimed || c.progress < def.target) return 0; c.claimed = true; p.coins += def.reward;
+    if (!p.daily.sweep && p.daily.challenges.length && p.daily.challenges.every(x => x.claimed)) { p.daily.sweep = true; p.gems += D.GEM_INCOME.challengeSweep; } return def.reward; }
+  // Free gems per day for a player who claims the streak and finishes all 3 challenges (day n of the streak).
+  const dailyGemsFree = day => streakGems(day) + D.GEM_INCOME.challengeSweep;
+  function daysToEarnGems(target, startGems) { let g = startGems || 0, d = 0; while (g < target && d < 1000) { d++; g += dailyGemsFree(d); } return d; }
 
   // ---------- Clubs & weekly league (simulated, no networking) ----------
   function weekKey(now) { const d = new Date(now.getFullYear(), now.getMonth(), now.getDate()); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return dateStr(d); }
@@ -1071,7 +1149,7 @@ button,.btn,select{min-height:44px}
   return { SAVE_KEY, LEGACY_SAVE_KEY, ENTITLEMENT_KEY, RACK, makeRng, xpToNext, addStatXp, rating, scoreGame, frameMarks, isGameComplete, nextRollInfo, isSplit, PIN_POS,
     patternById, alleyPattern, forgiveness, breakdownShift, idealHook, recommendBall, laneFit, effectiveDifficulty,
     ballById, gearById, ballProfile, gearBonus, effectiveStats, skillChance, simulateRoll, simulateGame, newPlayer, migrate, baseStats,
-    chaptersCleared, isUnlocked, buy, equip, bagCarry, altBallHook, playerBowler, opponentBowler, playMatch, matchRewards, countEvents, applyMatch, drillById, train, cleanBall,
+    chaptersCleared, isUnlocked, buy, equip, premById, bonusSum, premiumBaseline, premiumCapOk, premiumEdge, buyPremiumGear, grantStoryPremium, boostsLeft, buyPremiumItem, streakGems, dailyGemsFree, daysToEarnGems, bagCarry, altBallHook, playerBowler, opponentBowler, playMatch, matchRewards, countEvents, applyMatch, drillById, train, cleanBall,
     skillSlots, skillUpgradeCost, unlockSkills, upgradeSkill, toggleSkill, dateStr, dailyCheck, recordDaily, streakBonus, claimStreak, claimChallenge,
     weekKey, JOINABLE, createClub, joinClub, leaveClub, clubTable, clubCheck, leagueNight, cosById, buyCosmetic, equipCosmetic,
     refNormalize, refValidCode, refWindowOpen, refDaysLeft, refCanEnter, refApplyClaim, refMatchesLeft, refFriendReady, refMarkQualified, refCredit, refRewarded, refMaxGems, refShare,
@@ -2243,23 +2321,44 @@ button,.btn,select{min-height:44px}
     if (isBall) { const pr = C.ballProfile(it); spec = `<div class="muted">${D.COVERS[it.cover].label} · ${it.core} core · RG ${it.rg.toFixed(3)} · Diff ${it.diff.toFixed(3)}${it.mb ? ' · MB ' + it.mb.toFixed(3) : ''}<br>Hook ${pr.hook.toFixed(2)} → ${it.cover === 'plastic' ? 'straight spare ball (carry it in a 2+ ball bag)' : 'best on ' + (pr.hook < 0.6 ? 'short/light patterns' : pr.hook < 0.95 ? 'medium house shots' : 'long/heavy oil')}</div>`; }
     const cons = it.slot === 'consumable';
     const btn = cons ? `<button class="btn small" data-buy="${it.id}">🪙 ${it.price}</button>` : owned ? (equipped ? '<span class="tag ok">Equipped</span>' : `<button class="btn small green" data-eq="${it.id}">Equip</button>`) : `<button class="btn small" data-buy="${it.id}">🪙 ${it.price}</button>`;
-    return `<div class="card row">${isBall ? swatch(it.id === P.equipped.ball ? ballColors(it) : br.colors) : `<div class="swatch" style="background:${br.colors[0]};display:flex;align-items:center;justify-content:center;font-size:16px">${{ shoes: '👟', glove: '🧤', wrist: '🦾', grip: '🩹', bag: '🎒', consumable: '🧴' }[it.slot]}</div>`}<div class="grow"><b>${esc(it.name)}</b> <span class="muted">· ${esc(br.name)}</span><div>${statLine(it.bonus) || (it.carry ? 'Carries ' + it.carry + ' ball' + (it.carry > 1 ? 's (spare ball + ball switch)' : '') : cons ? (P.consumables[it.id] || 0) + ' owned' : '')}</div>${spec}</div>${btn}</div>`;
+    return `<div class="card row">${isBall ? swatch(it.id === P.equipped.ball ? ballColors(it) : br.colors) : `<div class="swatch" style="background:${br.colors[0]};display:flex;align-items:center;justify-content:center;font-size:16px">${{ shoes: '👟', glove: '🧤', wrist: '🦾', grip: '🩹', bag: '🎒', consumable: '🧴' }[it.slot]}</div>`}<div class="grow">${it.premium ? `<span class="tag" style="background:${D.PREMIUM_TIERS[it.tier].color};color:#fff">${D.PREMIUM_TIERS[it.tier].icon} ${D.PREMIUM_TIERS[it.tier].label}</span>` : ''}<b>${esc(it.name)}</b> <span class="muted">· ${esc(br.name)}</span><div>${statLine(it.bonus) || (it.carry ? 'Carries ' + it.carry + ' ball' + (it.carry > 1 ? 's (spare ball + ball switch)' : '') : cons ? (P.consumables[it.id] || 0) + ' owned' : '')}</div>${spec}</div>${btn}</div>`;
   }
   function bindItems(root, rerender) {
     root.querySelectorAll('[data-buy]').forEach(b => (b.onclick = () => { const r = C.buy(P, b.dataset.buy); toast(r.msg); sfx(r.ok ? 'coin' : 'denied'); if (r.ok) { persist(); rerender(); } }));
     root.querySelectorAll('[data-eq]').forEach(b => (b.onclick = () => { C.equip(P, b.dataset.eq); persist(); toast('Equipped!'); rerender(); }));
   }
   RENDER.shop = () => {
-    let html = topbar() + '<h2>🛍️ Pro Shops</h2><div class="tabs">' + Object.entries(D.SHOPS).map(([id, s]) => `<button class="btn ${id === shopTab ? 'sel' : ''}" data-tab="${id}">${C.isUnlocked(P, s) ? '' : '🔒 '}${s.name}</button>`).join('') + '</div>';
+    let html = topbar() + '<h2>🛍️ Pro Shops</h2><div class="tabs">' + Object.entries(D.SHOPS).map(([id, s]) => `<button class="btn ${id === shopTab ? 'sel' : ''}" data-tab="${id}">${C.isUnlocked(P, s) ? '' : '🔒 '}${s.name}</button>`).join('') + `<button class="btn ${shopTab === 'premium' ? 'sel' : ''}" data-tab="premium">💎 Premium Gear</button></div>`;
     const shop = D.SHOPS[shopTab];
-    if (!C.isUnlocked(P, shop)) html += `<div class="card locked"><b>${shop.name}</b><p>${shop.desc}</p><span class="tag warn">Unlocks after clearing Chapter ${shop.unlockChapter}</span></div>`;
+    if (shopTab === 'premium') html += premiumShopHtml();
+    else if (!C.isUnlocked(P, shop)) html += `<div class="card locked"><b>${shop.name}</b><p>${shop.desc}</p><span class="tag warn">Unlocks after clearing Chapter ${shop.unlockChapter}</span></div>`;
     else { html += `<div class="card muted">${shop.desc} Coverstock sets hook vs. oil (plastic straight → urethane → pearl → hybrid → solid strongest). Asymmetric cores and higher differential add backend.</div><h2>Balls</h2>`;
       D.BALLS.filter(b => b.shop === shopTab && b.price > 0).forEach(b => (html += itemCard(b, P.inventory.includes(b.id), true)));
       html += '<h2>Gear</h2>'; D.GEAR.filter(g => g.shop === shopTab && g.price > 0).forEach(g => (html += itemCard(g, P.inventory.includes(g.id), false))); }
     $('#shop').innerHTML = html;
     $('#shop').querySelectorAll('[data-tab]').forEach(b => (b.onclick = () => { shopTab = b.dataset.tab; RENDER.shop(); }));
     bindItems($('#shop'), RENDER.shop);
+    $('#shop').querySelectorAll('[data-pbuy]').forEach(b => (b.onclick = () => { const [id, cur] = b.dataset.pbuy.split(':'); const it = C.premById(id);
+      const go = () => { const r = C.buyPremiumGear(P, id, cur); toast(r.msg); sfx(r.ok ? 'coin' : 'denied'); if (r.ok) { C.equip(P, id); persist(); } RENDER.shop(); };
+      if ((cur === 'coins' ? P.coins < it.price : P.gems < it.gems)) return go();
+      modal(`<h2>${D.PREMIUM_TIERS[it.tier].icon} ${esc(it.name)}</h2><p>${statLine(it.bonus)}</p><p>Spend <b>${cur === 'coins' ? '🪙 ' + it.price : '💎 ' + it.gems}</b>?</p><p class="muted">In-game currency only. No real money is charged here.</p>`, [{ label: 'Buy', id: 'pBuyOk', fn: go }, { label: 'Cancel', cls: 'gray', fn: () => {} }]); }));
   };
+  function premiumShopHtml() {
+    let h = `<div class="card muted">💎 <b>Premium Gear</b> is at most ${Math.round(D.PREMIUM_CAP * 100)}% stronger than the best Pro Shop gear for the same slot and story stage. Buy with gems <b>or</b> coins, and the balls are free story rewards. Online PvP uses the Fair Play gear cap and leaderboards use base stats only, so gems never buy rank. Earn gems free: daily streak, finishing all 3 daily challenges, story chapters and friend invites.</div>`;
+    Object.entries(D.PREMIUM_TIERS).forEach(([tid, t]) => {
+      const open = C.chaptersCleared(P) >= t.unlockChapter;
+      h += `<h2><span class="tier-badge" style="background:${t.color}">${t.icon} ${t.label}</span>${open ? '' : ` <span class="tag warn">🔒 Unlocks after Chapter ${t.unlockChapter}</span>`}</h2>`;
+      D.PREMIUM_GEAR.filter(it => it.tier === tid).forEach(it => {
+        const br = D.BRANDS[it.brand], owned = P.inventory.includes(it.id), eq = it.kind === 'ball' ? P.equipped.ball === it.id : P.equipped[it.slot] === it.id;
+        const icon = it.kind === 'ball' ? swatch([t.color, br.colors[0]]) : `<div class="swatch" style="background:${t.color};display:flex;align-items:center;justify-content:center;font-size:16px">${{ shoes: '👟', glove: '🧤', wrist: '🦾' }[it.slot]}</div>`;
+        const spec = it.kind === 'ball' ? `<div class="muted">${D.COVERS[it.cover].label} · ${it.core} core · RG ${it.rg.toFixed(3)} · Diff ${it.diff.toFixed(3)} · MB ${it.mb.toFixed(3)}</div>` : '';
+        const earn = `<div class="muted">+${Math.round(C.premiumEdge(it) * 100)}% vs best Pro Shop ${it.kind === 'ball' ? 'ball' : it.slot}${it.storyReward ? ' · 🎁 Free for clearing Chapter ' + it.storyReward : ''}</div>`;
+        const btn = owned ? (eq ? '<span class="tag ok">Equipped</span>' : `<button class="btn small green" data-eq="${it.id}">Equip</button>`) : !open ? '<span class="tag warn">🔒</span>' : `<div class="col-btns"><button class="btn small blue" data-pbuy="${it.id}:gems">💎 ${it.gems}</button><button class="btn small gray" data-pbuy="${it.id}:coins">🪙 ${it.price}</button></div>`;
+        h += `<div class="card row prem-item${open ? '' : ' locked'}" data-pid="${it.id}">${icon}<div class="grow"><b>${esc(it.name)}</b> <span class="muted">· ${esc(br.name)}</span><div>${statLine(it.bonus)}</div>${spec}${earn}</div>${btn}</div>`;
+      });
+    });
+    return h;
+  }
   RENDER.gear = () => {
     let html = topbar() + '<h2>🎒 My Gear</h2>';
     const ball = C.ballById(P.equipped.ball); const cond = P.ballCondition[ball.id] == null ? 1 : P.ballCondition[ball.id];
@@ -2285,12 +2384,12 @@ button,.btn,select{min-height:44px}
   // ---------- Daily ----------
   RENDER.daily = () => {
     const r = C.dailyCheck(P, now()); persist();
-    let html = topbar() + `<h2>📅 Daily Challenges</h2><div class="card row"><span style="font-size:34px">🔥</span><div class="grow"><b>${P.daily.streak}-day login streak</b><div class="muted">Come back tomorrow to keep it going. Bonus grows to day 7. Resets at midnight (local).</div></div>${P.daily.streakClaimed ? '<span class="tag ok">Claimed</span>' : `<button class="btn small green" id="claimStreak">+${C.streakBonus(P.daily.streak)} 🪙</button>`}</div><div class="muted" style="margin-bottom:6px">Today: ${P.daily.date}</div>`;
+    let html = topbar() + `<h2>📅 Daily Challenges</h2><div class="card row"><span style="font-size:34px">🔥</span><div class="grow"><b>${P.daily.streak}-day login streak</b><div class="muted">Come back tomorrow to keep it going. Bonus grows to day 7. Resets at midnight (local).</div></div>${P.daily.streakClaimed ? '<span class="tag ok">Claimed</span>' : `<button class="btn small green" id="claimStreak">+${C.streakBonus(P.daily.streak)} 🪙 +${C.streakGems(P.daily.streak)} 💎</button>`}</div><div class="muted" style="margin-bottom:6px">Today: ${P.daily.date} · 💎 Finish all 3 challenges for +${D.GEM_INCOME.challengeSweep} gems${P.daily.sweep ? ' <span class="tag ok">Done</span>' : ''} · every 7th streak day +${D.GEM_INCOME.streakWeekly} gems</div>`;
     P.daily.challenges.forEach(c => { const def = D.CHALLENGES.find(x => x.id === c.id); const done = c.progress >= def.target;
       html += `<div class="card"><div class="row"><b class="grow">${esc(def.text)}</b>${c.claimed ? '<span class="tag ok">Claimed</span>' : done ? `<button class="btn small green" data-claim="${c.id}">Claim ${def.reward} 🪙</button>` : `<span class="tag">${def.reward} 🪙</span>`}</div><div class="bar" style="margin-top:6px"><i style="width:${100 * c.progress / def.target}%"></i></div><div class="muted">${c.progress}/${def.target}</div></div>`; });
     $('#daily').innerHTML = html;
-    const cs = $('#claimStreak'); if (cs) cs.onclick = () => { toast('+' + C.claimStreak(P) + ' coins!'); sfx('coin'); persist(); RENDER.daily(); };
-    $('#daily').querySelectorAll('[data-claim]').forEach(b => (b.onclick = () => { toast('+' + C.claimChallenge(P, b.dataset.claim) + ' coins!'); sfx('coin'); persist(); RENDER.daily(); }));
+    const cs = $('#claimStreak'); if (cs) cs.onclick = () => { const sg = C.streakGems(P.daily.streak); toast('+' + C.claimStreak(P) + ' coins, +' + sg + ' gems!'); sfx('coin'); persist(); RENDER.daily(); };
+    $('#daily').querySelectorAll('[data-claim]').forEach(b => (b.onclick = () => { const sw = P.daily.sweep; const n = C.claimChallenge(P, b.dataset.claim); toast('+' + n + ' coins!' + (!sw && P.daily.sweep ? ' All 3 done: +' + D.GEM_INCOME.challengeSweep + ' gems!' : '')); sfx('coin'); persist(); RENDER.daily(); }));
   };
   // ---------- Club & League ----------
   RENDER.club = () => {
@@ -2421,20 +2520,20 @@ button,.btn,select{min-height:44px}
     html += `<h2>🚫 Remove Ads</h2><div class="card row" id="removeAdsCard"><span style="font-size:28px">🚫</span><div class="grow"><b>Remove Ads — $${D.REMOVE_ADS.usd.toFixed(2)}</b><div class="muted">One-time (non-consumable). Removes banners and between-match ads. Optional reward ads stay available.</div></div>${P.entitlements.removeAds ? '<span class="tag ok">Owned</span>' : `<button class="btn small blue" id="buyRemoveAds">${storeLive() ? MON.price(D.REMOVE_ADS.sku, D.REMOVE_ADS.usd) : '$' + D.REMOVE_ADS.usd.toFixed(2) + ' (demo)'}</button>`}</div><button class="btn small gray" id="restoreBtn">Restore Purchases</button>`;
     html += `<h2>💎 Gems</h2>`;
     D.GEM_PACKS.forEach(g => (html += `<div class="card row"><span style="font-size:28px">💎</span><div class="grow"><b>${g.gems} Gems</b><div class="muted">${g.label}</div></div><button class="btn small blue" data-pack="${g.id}">${storeLive() ? MON.price(g.sku, g.usd) : '$' + g.usd.toFixed(2) + ' (demo)'}</button></div>`));
-    D.PREMIUM_ITEMS.forEach(it => (html += `<div class="card row"><span style="font-size:26px">${it.type === 'coins' ? '🪙' : '⚡'}</span><div class="grow"><b>${esc(it.name)}</b><div class="muted">Convenience, no stat power</div></div><button class="btn small" data-prem="${it.id}">💎 ${it.gems}</button></div>`));
+    D.PREMIUM_ITEMS.forEach(it => (html += `<div class="card row"><span style="font-size:26px">${it.type === 'coins' ? '🪙' : '⚡'}</span><div class="grow"><b>${esc(it.name)}</b><div class="muted">${it.type === 'xpboost' ? (D.GEM_BOOSTS.enabled ? 'Faster training, never raw stats. Limit ' + D.GEM_BOOSTS.xpBoostPerDay + '/day (' + C.boostsLeft(P, now()) + ' left today)' : 'Not available') : 'Convenience, no stat power'}</div></div><button class="btn small" data-prem="${it.id}">💎 ${it.gems}</button></div>`));
     $('#style').innerHTML = html;
     $('#style').querySelectorAll('[data-go]').forEach(b => (b.onclick = () => show(b.dataset.go)));
     $('#style').querySelectorAll('[data-st]').forEach(b => (b.onclick = () => { styleTab = b.dataset.st; RENDER.style(); }));
     $('#style').querySelectorAll('[data-cbuy]').forEach(b => (b.onclick = () => { const r = C.buyCosmetic(P, b.dataset.cbuy); toast(r.msg); sfx(r.ok ? 'coin' : 'denied'); if (r.ok) { C.equipCosmetic(P, b.dataset.cbuy); persist(); RENDER.style(); } }));
     $('#style').querySelectorAll('[data-ceq]').forEach(b => (b.onclick = () => { if (b.dataset.ceq) C.equipCosmetic(P, b.dataset.ceq); else P.cos.ball = null; persist(); RENDER.style(); }));
     const bra = $('#buyRemoveAds'); if (bra && storeLive()) bra.onclick = () => parentGate(() => MON.buy(D.REMOVE_ADS.sku).then(r => { if (r.ok && r.removeAds) { C.purchaseRemoveAds(P, localStorage); MON.removeBanner(); sfx('coin'); persist(); toast('Thank you! Ads removed.'); } else if (!r.cancelled) toast(r.msg || 'Purchase did not complete'); RENDER.style(); }));
-    else if (bra) bra.onclick = () => parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this opens the App Store / Google Play checkout for the <b>Remove Ads</b> non-consumable at <b>$2.99</b>.</p><p>Demo mode: entitlement granted, no money charged.</p>`, [{ label: 'OK', fn: () => { C.purchaseRemoveAds(P, localStorage); sfx('coin'); persist(); RENDER.style(); } }]));
+    else if (bra) bra.onclick = () => parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this opens the App Store / Google Play checkout for the <b>Remove Ads</b> non-consumable at <b>$0.99</b>.</p><p>Demo mode: entitlement granted, no money charged.</p>`, [{ label: 'OK', fn: () => { C.purchaseRemoveAds(P, localStorage); sfx('coin'); persist(); RENDER.style(); } }]));
     if (storeLive()) $('#restoreBtn').onclick = () => MON.restore().then(r => { if (r.ok && r.removeAds) { C.purchaseRemoveAds(P, localStorage); MON.removeBanner(); persist(); toast('Restored: Remove Ads'); } else toast(r.ok ? 'No purchases to restore' : (r.msg || 'Restore failed')); RENDER.style(); });
     else $('#restoreBtn').onclick = () => { const ok = C.restorePurchases(P, localStorage); persist(); toast(ok ? 'Restored: Remove Ads' : 'Nothing to restore (demo)'); RENDER.style(); };
     $('#style').querySelectorAll('[data-pack]').forEach(b => (b.onclick = () => { const g = D.GEM_PACKS.find(x => x.id === b.dataset.pack);
       if (storeLive()) return parentGate(() => MON.buy(g.sku).then(r => { if (r.ok) { const n = C.grantGemPack(P, g.id, r.txId); sfx('coin'); persist(); toast('+' + n + ' gems!'); } else if (!r.cancelled) toast(r.msg || 'Purchase did not complete'); RENDER.style(); }));
       parentGate(() => modal(`<h2>Demo purchase</h2><p>In the real app this would open the store checkout for <b>$${g.usd.toFixed(2)}</b>.</p><p>Demo mode: ${g.gems} gems added for testing. No money was charged.</p>`, [{ label: 'OK', fn: () => { P.gems += g.gems; sfx('coin'); persist(); RENDER.style(); } }])); }));
-    $('#style').querySelectorAll('[data-prem]').forEach(b => (b.onclick = () => { const it = D.PREMIUM_ITEMS.find(x => x.id === b.dataset.prem); if (P.gems < it.gems) { sfx('denied'); return toast('Not enough gems'); } sfx('coin'); P.gems -= it.gems; if (it.type === 'coins') P.coins += it.amount; if (it.type === 'xpboost') P.xpBoost += it.amount; persist(); toast('Got ' + it.name + '!'); RENDER.style(); }));
+    $('#style').querySelectorAll('[data-prem]').forEach(b => (b.onclick = () => { const r = C.buyPremiumItem(P, b.dataset.prem, now()); sfx(r.ok ? 'coin' : 'denied'); toast(r.msg); if (r.ok) persist(); RENDER.style(); }));
   };
 
   // ---------- Training ----------
@@ -2519,7 +2618,7 @@ button,.btn,select{min-height:44px}
     }
     if (rw.storyMsg) {
       const ch = D.STORY[P.story.chapter - 2];
-      extra += `<p class="banner">🎉 ${esc(rw.storyMsg)} +${250 * ch.id} bonus coins</p>`;
+      extra += `<p class="banner">🎉 ${esc(rw.storyMsg)} +${250 * ch.id} bonus coins${rw.gemsEarned ? ', +' + rw.gemsEarned + ' 💎' : ''}</p>` + (rw.rewardItems || []).map(id => `<p class="banner">🎁 Story reward: <b>${esc(C.premById(id).name)}</b> (${D.PREMIUM_TIERS[C.premById(id).tier].label} gear) added to your bag!</p>`).join('');
       const cleared = P.story.chapter - 1;
       const nowUnlocked = [...Object.values(D.ALLEYS), ...Object.values(D.SHOPS)].filter(x => x.unlockChapter === cleared).map(x => x.name);
       const drills = D.DRILLS.filter(x => x.unlockChapter === cleared), skills = Object.values(D.SKILLS).filter(x => !x.rivalOnly && x.unlockChapter === cleared), pats = Object.values(D.PATTERNS).filter(x => x.unlockChapter === cleared);
