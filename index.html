@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.5.1"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.6.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -104,12 +104,18 @@ button,.btn,select{min-height:44px}
 .tutinline{border:3px solid #facc15;border-radius:16px;background:#fffbea;padding:4px 6px 0}
 .tutmatch{position:fixed;top:calc(6px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:min(452px,calc(100% - 16px));z-index:12;display:flex;gap:8px;align-items:center;background:#fffbeaf2;border:3px solid #facc15;border-radius:14px;padding:5px 8px;font-size:13px;line-height:1.3;pointer-events:none;box-shadow:0 4px 12px #0004}
 .tutmatch .tav canvas{display:block;border-radius:50%;background:#ede9fe}
+/* v0.6 Friends / invite screen */
+.refcode{font:900 38px/1.1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:8px;color:#5b21b6;background:#f5f3ff;border:3px dashed #a78bfa;border-radius:14px;padding:10px 4px 10px 12px;margin:6px auto;user-select:all;-webkit-user-select:all}
+.tier{padding:7px 0;border-top:1px solid #f1f5f9;gap:8px}.tier.done{opacity:.75}
+.tierN{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;background:#fde68a;font-weight:900;font-size:14px;flex:none}
+.tier.done .tierN{background:#86efac}
+#refIn{text-transform:uppercase;letter-spacing:5px;text-align:center;font-weight:900;font-family:ui-monospace,Menlo,Consolas,monospace}
 </style></head>
 <body><div id="app">
 <section class="screen" id="create"></section><section class="screen" id="hub"></section><section class="screen" id="story"></section>
 <section class="screen" id="pvp"></section><section class="screen" id="training"></section><section class="screen" id="alleys"></section>
 <section class="screen" id="shop"></section><section class="screen" id="gear"></section>
-<section class="screen" id="stats"></section><section class="screen" id="leaderboard"></section><section class="screen" id="skills"></section><section class="screen" id="daily"></section><section class="screen" id="club"></section><section class="screen" id="style"></section><section class="screen" id="guide"></section><section class="screen" id="settings"></section><section class="screen" id="match"></section>
+<section class="screen" id="stats"></section><section class="screen" id="leaderboard"></section><section class="screen" id="skills"></section><section class="screen" id="daily"></section><section class="screen" id="club"></section><section class="screen" id="style"></section><section class="screen" id="guide"></section><section class="screen" id="friends"></section><section class="screen" id="settings"></section><section class="screen" id="match"></section>
 </div>
 <div class="modal" id="modal"><div class="card"><div id="modalBody"></div><div id="modalBtns"></div></div></div><div class="toast" id="toast"></div>
 <script>/* Pin Masters RPG — ALL account keys live in this one file. See store/SETUP_KEYS.md.
@@ -130,6 +136,9 @@ button,.btn,select{min-height:44px}
     },
     // Dev only: point at the Firebase Local Emulator Suite, e.g. { host: '127.0.0.1', firestorePort: 8085, authPort: 9099 }.
     firebaseEmulator: null,
+    // Friend codes (v0.6) use the same Firebase project. Set requireServerVerify:true ONLY after deploying functions/ (verifyReferral,
+    // Blaze plan): then a friend pays out only once the server has checked them. false = the game credits every qualified claim.
+    referral: { requireServerVerify: false },
 
     // 2) ADMOB (native Android/iOS app only; the website always shows the demo placeholders).
     //    Defaults are Google's official TEST IDs, which only ever show "Test Ad" creatives.
@@ -357,8 +366,31 @@ button,.btn,select{min-height:44px}
     { id: 'cel_confetti', type: 'celebration', name: 'Confetti Pop', fx: 'confetti', coins: 600 },
     { id: 'cel_golden', type: 'celebration', name: 'Golden Pins', fx: 'stars', coins: 1200 },
     { id: 'cel_fireworks', type: 'celebration', name: 'Fireworks', fx: 'fireworks', gems: 150 },
-    { id: 'cel_disco', type: 'celebration', name: 'Disco Dance', fx: 'disco', gems: 200 }
+    { id: 'cel_disco', type: 'celebration', name: 'Disco Dance', fx: 'disco', gems: 200 },
+    // Friend-program rewards (v0.6): can't be bought, only earned through the Friends screen. Still cosmetic only.
+    { id: 'ball_buddy', type: 'ball', name: 'Buddy Bowl', color: '#06d6a0', color2: '#ffd166', referral: true },
+    { id: 'out_squad', type: 'outfit', name: 'Squad Jacket', color: '#118ab2', referral: true },
+    { id: 'cel_highfive', type: 'celebration', name: 'High Five', fx: 'highfive', referral: true },
+    { id: 'ball_friendship', type: 'ball', name: 'Friendship Galaxy', color: '#ef476f', color2: '#7b2cbf', referral: true }
   ];
+  // Friend referral program (v0.6). Rewards are in-game only (gems + cosmetics with NO stat effects). Never for reviews, ratings or
+  // installing other apps, and inviting is never needed to progress. Codes are 6 characters with no vowels and no look-alikes (0/O, 1/I/L).
+  const REFERRAL = {
+    codeLength: 6, alphabet: 'BCDFGHJKMNPQRSTVWXYZ23456789',
+    windowDays: 7,            // a friend's code can be entered during your first 7 days (also enforced by firestore.rules)
+    qualifyMatches: 3,        // your friend "counts" once they finish 3 matches after entering your code
+    qualifyMinSeconds: 60,    // ...and at least a minute after entering it (server rule; slows down farming)
+    newPlayer: { gems: 50, cosmetic: 'ball_buddy' },
+    perFriend: 40,            // gems for each friend who counts
+    maxFriends: 10,           // rewards stop after 10 friends (cap: 10 x 40 + tier bonuses = 800 gems)
+    tiers: [
+      { friends: 1, gems: 25, cosmetic: 'ball_buddy' },
+      { friends: 3, gems: 75, cosmetic: 'out_squad' },
+      { friends: 5, gems: 100, cosmetic: 'cel_highfive' },
+      { friends: 10, gems: 200, cosmetic: 'ball_friendship' }
+    ],
+    link: 'https://zoiksking.github.io/pin-masters-rpg/'
+  };
   // Rival: Brock "Showtime" Sterling (he/him). Original character. Recurs across the story.
   const RIVAL = {
     id: 'brock', name: 'Brock Sterling', nick: 'Showtime', pronouns: 'he/him', style: 'Flashy local hotshot with a huge hook',
@@ -428,7 +460,7 @@ button,.btn,select{min-height:44px}
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.5.1';
+  const APP_VERSION = '0.6.0';
   const TUTORIAL = {
     reward: 100,
     steps: [
@@ -455,13 +487,14 @@ button,.btn,select{min-height:44px}
       daily: 'Claim your streak bonus every day, and finish challenges for extra coins.',
       club: 'Pick a club, then bowl League Night. Rewards pay out every week.',
       leaderboard: 'Your Rating is the sum of your stats. Train and win to climb!',
+      friends: 'Invite friends with your code. When a friend finishes 3 matches you both get gems. Inviting is optional - you never need it to progress.',
       style: 'Outfits, ball designs and celebrations only change how you look, not your stats.',
       brock: 'That\'s Brock "Showtime" Sterling. He\'s cocky, but every great bowler has a rival. Keep training!',
       sport: 'Sport patterns are tough: misses get punished. High Accuracy and Consistency help a lot here.'
     }
   };
 
-  return { APP_VERSION, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, RIVAL_FIRST, RIVAL_LAST };
+  return { APP_VERSION, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, REFERRAL, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, RIVAL_FIRST, RIVAL_LAST };
 });
 </script><script>/* Pin Masters RPG core logic: pure functions (no DOM) so it can be unit-tested in Node
  * and later run on a server for authoritative PvP. */
@@ -724,6 +757,9 @@ button,.btn,select{min-height:44px}
     // Saves from before v0.4 have no tutorial flag: never force the full tour on them; offer it once and turn on contextual tips.
     if (!p.tutorial) p.tutorial = { status: 'legacy', step: 0, tips: true, seen: {}, offered: false, rewarded: false };
     p.tutorial.seen = p.tutorial.seen || {};
+    // v0.6 friend program. Older saves get their 7-day "enter a friend's code" window from the day they update.
+    p.createdAt = p.createdAt || Date.now();
+    p.referral = p.referral || { claim: null, qualified: false, credited: [], tiers: [], gemsEarned: 0, extra: 0 };
     return p;
   }
   // ---------- Tutorial (status: new -> active -> done | skipped; legacy = old save; declined = said no to the offer) ----------
@@ -920,9 +956,55 @@ button,.btn,select{min-height:44px}
   const cosById = id => D.COSMETICS.find(c => c.id === id);
   function buyCosmetic(p, id) {
     const c = cosById(id); if (!c) return { ok: false, msg: 'Unknown' }; if (p.cosmetics.includes(id)) return { ok: false, msg: 'Owned' };
+    if (c.referral) return { ok: false, msg: 'Earn this by inviting friends' };
     if (c.gems) { if (p.gems < c.gems) return { ok: false, msg: 'Not enough gems' }; p.gems -= c.gems; } else { if (p.coins < (c.coins || 0)) return { ok: false, msg: 'Not enough coins' }; p.coins -= c.coins || 0; }
     p.cosmetics.push(id); return { ok: true, msg: 'Unlocked ' + c.name };
   }
+  // ---------- Friend referral program (v0.6). Pure local logic; online.js stores codes/claims in Firestore. ----------
+  // Rules (see D.REFERRAL): one code per account, never your own, only in your first 7 days. You get gems + Buddy Bowl right away;
+  // your friend gets gems once you finish 3 matches. Tier bonuses at 1/3/5/10 friends; rewards stop after 10 friends.
+  const R = () => D.REFERRAL, DAY_MS = 86400000;
+  const refCodeRe = () => new RegExp('^[' + R().alphabet + ']{' + R().codeLength + '}$');
+  const refNormalize = raw => String(raw == null ? '' : raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const refValidCode = code => refCodeRe().test(String(code || ''));
+  function refWindowOpen(p, nowMs) { migrate(p); return (nowMs - p.createdAt) < R().windowDays * DAY_MS; }
+  function refDaysLeft(p, nowMs) { migrate(p); return Math.max(0, Math.ceil((p.createdAt + R().windowDays * DAY_MS - nowMs) / DAY_MS)); }
+  function refCanEnter(p, raw, nowMs, myCode) {
+    migrate(p); const code = refNormalize(raw);
+    if (p.referral.claim) return { ok: false, reason: 'You already used a friend code' };
+    if (!refWindowOpen(p, nowMs)) return { ok: false, reason: 'Friend codes can only be used in your first ' + R().windowDays + ' days' };
+    if (!refValidCode(code)) return { ok: false, reason: 'Codes are ' + R().codeLength + ' letters and numbers, like ' + 'BK7Q4M' };
+    if (myCode && code === myCode) return { ok: false, reason: 'That\'s your own code - share it with a friend instead!' };
+    return { ok: true, code };
+  }
+  function refGrantCos(p, id) { if (!id || !cosById(id) || p.cosmetics.includes(id)) return false; p.cosmetics.push(id); return true; }
+  // New player: called once the server accepted the claim. Idempotent.
+  function refApplyClaim(p, code, nowMs) {
+    migrate(p); if (p.referral.claim) return null;
+    p.referral.claim = { code, at: nowMs, matchesAt: p.matches || 0 };
+    const nb = R().newPlayer; p.gems += nb.gems; const cos = refGrantCos(p, nb.cosmetic) ? nb.cosmetic : null;
+    return { gems: nb.gems, cosmetic: cos };
+  }
+  function refMatchesLeft(p) { migrate(p); const c = p.referral.claim; return c ? Math.max(0, R().qualifyMatches - ((p.matches || 0) - c.matchesAt)) : null; }
+  // True when this player (the invited friend) has reached the milestone and the server should be told.
+  function refFriendReady(p, nowMs) { migrate(p); const c = p.referral.claim; return !!c && !p.referral.qualified && refMatchesLeft(p) === 0 && nowMs - c.at >= R().qualifyMinSeconds * 1000; }
+  function refMarkQualified(p) { migrate(p); p.referral.qualified = true; }
+  // Referrer: credit each friend (claimer id) who counts, once. Returns what was newly granted. Capped at maxFriends.
+  function refCredit(p, friendIds) {
+    migrate(p); const r = p.referral, out = { friends: 0, gems: 0, cosmetics: [], tiers: [] };
+    (friendIds || []).forEach(id => {
+      if (!id || r.credited.includes(id)) return;
+      if (r.credited.length >= R().maxFriends) { r.extra = (r.extra || 0) + 1; r.credited.push(id); return; }   // remembered, no reward past the cap
+      r.credited.push(id); out.friends++; out.gems += R().perFriend;
+      const n = Math.min(r.credited.length, R().maxFriends);
+      R().tiers.forEach(t => { if (n >= t.friends && !r.tiers.includes(t.friends)) { r.tiers.push(t.friends); out.tiers.push(t.friends); out.gems += t.gems; if (refGrantCos(p, t.cosmetic)) out.cosmetics.push(t.cosmetic); } });
+    });
+    p.gems += out.gems; r.gemsEarned += out.gems; return out;
+  }
+  const refRewarded = p => (migrate(p), Math.min(p.referral.credited.length, R().maxFriends));
+  const refMaxGems = () => R().perFriend * R().maxFriends + R().tiers.reduce((a, t) => a + t.gems, 0);
+  function refShare(code) { const url = R().link + '?ref=' + code; return { title: 'Pin Masters RPG', text: 'Bowl with me in Pin Masters RPG! Use my friend code ' + code + ' for bonus gems.', url }; }
+
   function equipCosmetic(p, id) { const c = cosById(id); if (!c || !p.cosmetics.includes(id)) return false; p.cos[c.type] = id; return true; }
 
   // ---------- Ads (simulated DEMO placements) & Remove Ads entitlement ----------
@@ -992,6 +1074,7 @@ button,.btn,select{min-height:44px}
     chaptersCleared, isUnlocked, buy, equip, bagCarry, altBallHook, playerBowler, opponentBowler, playMatch, matchRewards, countEvents, applyMatch, drillById, train, cleanBall,
     skillSlots, skillUpgradeCost, unlockSkills, upgradeSkill, toggleSkill, dateStr, dailyCheck, recordDaily, streakBonus, claimStreak, claimChallenge,
     weekKey, JOINABLE, createClub, joinClub, leaveClub, clubTable, clubCheck, leagueNight, cosById, buyCosmetic, equipCosmetic,
+    refNormalize, refValidCode, refWindowOpen, refDaysLeft, refCanEnter, refApplyClaim, refMatchesLeft, refFriendReady, refMarkQualified, refCredit, refRewarded, refMaxGems, refShare,
     shouldShowInterstitial, markInterstitialShown, bannerVisible, canWatchRewarded, grantRewarded, purchaseRemoveAds, restorePurchases,
     generateRivals, leaderboard, tierOf, save, load, eloAfter, ELO_K, cardFromPlayer, cardToBowler, hashStr, grantGemPack, ageGroupOf, setAgeGroup, adTreatment, data: D,
     tutActive, tutStep, tutStart, tutGoto, tutAdvance, tutComplete, tutSkip, tutDecline, tutReplay, tutShouldOffer, tipsOn, tipDue, markTip, setTips };
@@ -1415,6 +1498,7 @@ button,.btn,select{min-height:44px}
       else if (type === 'stars') add(18, () => ({ t: 'star', x: 60 + Math.random() * 220, y: 140 + Math.random() * 60, vx: 0, vy: -1.2, c: '#facc15', life: 1.3, sz: 16 }));
       else if (type === 'disco') add(40, i => ({ x: CX + Math.cos(i) * 120, y: 260 + Math.sin(i * 1.7) * 140, vx: Math.cos(i * 3), vy: Math.sin(i * 2), c: cols[i % 6], life: 1.3, sz: 9 }));
       else if (type === 'thumbs') st.parts.push({ t: 'txt', s: '👍', f: '54px sans-serif', x: CX, y: 360, vx: 0, vy: -1, c: '#000', life: 1.2 });
+      else if (type === 'highfive') { st.parts.push({ t: 'txt', s: '🙌', f: '58px sans-serif', x: CX, y: 360, vx: 0, vy: -1, c: '#000', life: 1.3 }); add(30, i => ({ x: CX + (Math.random() - 0.5) * 160, y: 360, vx: (Math.random() - 0.5) * 4, vy: -1 - Math.random() * 3, c: cols[i % 6], life: 1.1, sz: 6 })); }
       else if (type === 'sparkle') { add(30, () => ({ t: 'star', x: Math.random() * W, y: 120 + Math.random() * 300, vx: 0, vy: -0.6, c: '#ffd60a', life: 1.4, sz: 12 })); st.parts.push({ t: 'txt', s: '✨ SHOWTIME! ✨', f: 'bold 26px Trebuchet MS', x: CX, y: 340, vx: 0, vy: -0.5, c: '#b45309', life: 1.5 }); }
     }
     function stepParts() { st.parts.forEach(p => { p.x += p.vx; p.y += p.vy; if (p.t !== 'txt' && p.t !== 'star') p.vy += 0.08; p.life -= 0.02; }); st.parts = st.parts.filter(p => p.life > 0); }
@@ -1523,6 +1607,30 @@ button,.btn,select{min-height:44px}
   }
   function patternFor(rating, seed) { const pool = Object.keys(D.PATTERNS).filter(k => rating < 60 ? D.PATTERNS[k].kind === 'house' : D.PATTERNS[k].kind !== 'house'); return pool[seed % pool.length]; }
   const matchSeed = (a, b, n) => C.hashStr(a + '|' + b + '|' + n) || 1;
+  // ---------- Friend codes (v0.6): 6 chars, no vowels, no look-alikes, derived from the anonymous uid (no personal data) ----------
+  // Extra blocks for consonant-only "words", hate numbers and look-alikes that the nickname lists don't need.
+  const REF_SKEL = ['fck', 'fk', 'fuk', 'sht', 'btch', 'cnt', 'kkk', 'dck', 'dk', 'cck', 'ngg', 'ngr', 'nzi', 'fgt', 'pns', 'vgn', 'sx', 'xxx', 'pdo', 'rp', 'wtf', 'stfu', 'kys',
+    'tts', 'pss', 'prn', 'dmn', 'hll', 'jzz', 'cm', 'gy', 'kll', 'gn', 'drg', 'wd', 'pp', 'pt', 'bj', 'hj', 'nd', 'nsfw', 'fml', 'gtfo', 'pmp', 'h8', '666', '69', '420', '88', '14', '911', '187'];
+  function refCodeClean(code) {
+    const raw = String(code).toLowerCase(), d = deleet(code), sq = squash(code);
+    if (REF_SKEL.some(w => raw.includes(w) || d.includes(w) || sq.includes(w))) return false;
+    if (BAD_SUB.some(w => d.includes(w) || sq.includes(w))) return false;
+    if (BAD_WORD.some(w => w.length >= 3 && (d.includes(w) || sq.includes(w)))) return false;
+    if (RESERVED.some(w => d.includes(w))) return false;
+    return /^(.)\1+$/.test(code) ? false : true;
+  }
+  // Deterministic: the same uid + attempt always gives the same code; attempt > 0 is only used if a code is already taken.
+  // murmur3 finaliser: spreads the uid hash so every character is independent (plain FNV mod 28 collides badly).
+  function fmix32(h) { h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16; return h >>> 0; }
+  function refCodeFor(uid, attempt) {
+    const R = D.REFERRAL, A = R.alphabet;
+    for (let salt = 0; salt < 200; salt++) {
+      const h0 = C.hashStr(uid + '|ref|' + (attempt || 0) + '|' + salt);
+      let code = ''; for (let i = 0; i < R.codeLength; i++) code += A[fmix32((h0 + Math.imul(i + 1, 0x9e3779b9)) >>> 0) % A.length];
+      if (refCodeClean(code)) return code;
+    }
+    throw new Error('no clean code');
+  }
   const withTimeout = (pr, ms, what) => Promise.race([pr, new Promise((_, rej) => setTimeout(() => rej(new Error((what || 'request') + ' timed out')), ms || TIMEOUT_MS))]);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
@@ -1638,6 +1746,60 @@ button,.btn,select{min-height:44px}
       }
       return { kind, label: B.label, period: kind === 'week' ? 'Week ' + kv.split('-W')[1] : kind === 'season' ? seasonName(kv) : 'All-time', rows, me };
     };
+    // ---------- Friend codes & referral claims (v0.6) ----------
+    // referralCodes/{CODE} = {uid}, referrers/{uid} = {code, createdAt}: one immutable code per account (created together).
+    // referralClaims/{claimerUid} = {claimer, referrer, code, createdAt, qualified, qualifiedAt}: one per account, immutable except the qualified flip.
+    const toMs = t => t && t.toMillis ? t.toMillis() : (typeof t === 'number' ? t : null);
+    const refDoc = (c, id) => F.doc(db, c, id);
+    S.referral = null;
+    const _refSetup = async function () {
+      if (S.referral) return S.referral;
+      const me = await withTimeout(F.getDoc(refDoc('referrers', S.uid)), TIMEOUT_MS, 'friend code');
+      if (me.exists()) { const d = me.data(); return (S.referral = { code: d.code, createdAt: toMs(d.createdAt) }); }
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const code = refCodeFor(S.uid, attempt);
+        try {
+          await withTimeout(F.runTransaction(db, async tx => {
+            const cs = await tx.get(refDoc('referralCodes', code)); if (cs.exists()) throw new Error('CODE_TAKEN');
+            tx.set(refDoc('referralCodes', code), { uid: S.uid, createdAt: F.serverTimestamp() });
+            tx.set(refDoc('referrers', S.uid), { uid: S.uid, code, createdAt: F.serverTimestamp() });
+          }), TIMEOUT_MS, 'friend code');
+          const d = (await F.getDoc(refDoc('referrers', S.uid))).data();
+          return (S.referral = { code, createdAt: toMs(d.createdAt) || Date.now() });
+        } catch (e) { if (e.message !== 'CODE_TAKEN') throw e; }
+      }
+      throw new Error('could not make a friend code');
+    };
+    S.referralSetup = () => serial(_refSetup);
+    // Enter a friend's code. Returns {ok, code} or {ok:false, reason}. Rewards are applied by the caller (C.refApplyClaim) only on ok.
+    S.claimReferral = (p, raw) => serial(async () => {
+      const me = await _refSetup(), t = nowFn().getTime();
+      const chk = C.refCanEnter(p, raw, t, me.code); if (!chk.ok) return chk;
+      if (me.createdAt && t - me.createdAt >= D.REFERRAL.windowDays * 86400000) return { ok: false, reason: 'Friend codes can only be used in your first ' + D.REFERRAL.windowDays + ' days' };
+      try {
+        await withTimeout(F.runTransaction(db, async tx => {
+          const cs = await tx.get(refDoc('referralCodes', chk.code)); if (!cs.exists()) throw new Error('NO_CODE');
+          const referrer = cs.data().uid; if (referrer === S.uid) throw new Error('OWN_CODE');
+          const mine = await tx.get(refDoc('referralClaims', S.uid)); if (mine.exists()) throw new Error('ALREADY');
+          tx.set(refDoc('referralClaims', S.uid), { claimer: S.uid, referrer, code: chk.code, createdAt: F.serverTimestamp(), qualified: false, qualifiedAt: null });
+        }), TIMEOUT_MS, 'friend code');
+        return { ok: true, code: chk.code };
+      } catch (e) {
+        const m = e && (e.code || e.message) || '';
+        if (/NO_CODE/.test(m)) return { ok: false, reason: 'No bowler has that code. Check the letters and try again.' };
+        if (/OWN_CODE/.test(m)) return { ok: false, reason: 'That\'s your own code - share it with a friend instead!' };
+        if (/ALREADY/.test(m)) return { ok: false, already: true, reason: 'You already used a friend code' };
+        if (/permission/i.test(m)) return { ok: false, reason: 'That code can\'t be used. Codes work in your first ' + D.REFERRAL.windowDays + ' days, and two friends can\'t use each other\'s codes.' };
+        throw e;
+      }
+    });
+    // Invited player reached the milestone: one-way flip (server rule also needs >= 60 s since the claim).
+    S.qualifyReferral = () => serial(async () => { await withTimeout(F.updateDoc(refDoc('referralClaims', S.uid), { qualified: true, qualifiedAt: F.serverTimestamp() }), TIMEOUT_MS, 'friend reward'); return true; });
+    // Referrer: friends who used my code (only ids + status; no names or personal data).
+    S.referralFriends = () => serial(async () => {
+      const snap = await withTimeout(F.getDocs(F.query(F.collection(db, 'referralClaims'), F.where('referrer', '==', S.uid), F.limit(50))), TIMEOUT_MS, 'friends');
+      return snap.docs.map(d => { const x = d.data(); return { id: d.id, qualified: !!x.qualified, verified: x.verified === undefined ? null : !!x.verified }; });
+    });
     // "Delete my online data": removes your profile, nickname reservation, ranked match logs and the anonymous account itself.
     S.deleteOnlineData = (p) => serial(() => _deleteOnlineData(p));
     const _deleteOnlineData = async function (p) {
@@ -1645,10 +1807,16 @@ button,.btn,select{min-height:44px}
       const ms = await withTimeout(F.getDocs(F.query(F.collection(db, 'matches'), F.where('a', '==', S.uid), F.limit(100))), TIMEOUT_MS, 'match list');
       ms.docs.forEach(d => b.delete(d.ref));
       if (pr && pr.nickKey) b.delete(F.doc(db, 'nicknames', pr.nickKey));
-      b.delete(userRef()); await withTimeout(b.commit(), TIMEOUT_MS, 'delete');
+      // Friend program docs: my code, my claim, and claims that point at me.
+      const rme = await withTimeout(F.getDoc(refDoc('referrers', S.uid)), TIMEOUT_MS, 'friend code');
+      if (rme.exists()) { b.delete(rme.ref); b.delete(refDoc('referralCodes', rme.data().code)); }
+      const rcl = await withTimeout(F.getDoc(refDoc('referralClaims', S.uid)), TIMEOUT_MS, 'friend claim'); if (rcl.exists()) b.delete(rcl.ref);
+      const rfr = await withTimeout(F.getDocs(F.query(F.collection(db, 'referralClaims'), F.where('referrer', '==', S.uid), F.limit(50))), TIMEOUT_MS, 'friends'); rfr.docs.forEach(d => b.delete(d.ref));
+      const uref = await withTimeout(F.getDoc(userRef()), TIMEOUT_MS, 'profile');
+      if (uref.exists()) b.delete(userRef()); await withTimeout(b.commit(), TIMEOUT_MS, 'delete');
       if (ms.size === 100) { let more; do { more = await F.getDocs(F.query(F.collection(db, 'matches'), F.where('a', '==', S.uid), F.limit(100))); const b2 = F.writeBatch(db); more.docs.forEach(d => b2.delete(d.ref)); if (more.size) await b2.commit(); } while (more.size === 100); }
       const uid = S.uid; try { if (F.deleteUser && auth.currentUser) await F.deleteUser(auth.currentUser); } catch (e) { /* account removal is best effort; data is already gone */ }
-      if (p) delete p.online; S.profile = null; S.ready = false; S.uid = null; svcReset(); return { ok: true, uid };
+      if (p) delete p.online; S.profile = null; S.referral = null; S.ready = false; S.uid = null; svcReset(); return { ok: true, uid };
     };
     S._db = () => db; S._auth = () => auth;
     return S;
@@ -1668,7 +1836,7 @@ button,.btn,select{min-height:44px}
     })().catch(e => { console.warn('[online] offline fallback:', e && e.message); lastError = e; starting = null; return null; });
     return starting;
   }
-  return { START_ELO, MATCH_GAP_MS, cleanNickname, randomNickname, buildNickname, randomParts, NAME_WORDS: { ADJ, NOUN }, squash, deleet, weekKey, seasonKey, trackScore, ensure, patternFor, matchSeed, createService, configured,
+  return { START_ELO, MATCH_GAP_MS, refCodeFor, refCodeClean, cleanNickname, randomNickname, buildNickname, randomParts, NAME_WORDS: { ADJ, NOUN }, squash, deleet, weekKey, seasonKey, trackScore, ensure, patternFor, matchSeed, createService, configured,
     enabled: () => configured(G && G.PM_CONFIG), connect, service: () => svc, lastError: () => lastError };
 });
 </script><script>/* Pin Masters RPG native monetisation: Google AdMob ads + RevenueCat in-app purchases.
@@ -1881,10 +2049,10 @@ button,.btn,select{min-height:44px}
   }
   function connectOnline() {
     if (!onlineOn()) return Promise.resolve(null);
-    return ON.connect().then(s => { const fresh = s && s !== online; online = s; if (fresh && P) { s.adopt(P); persist(); if (s.hasNickname()) s.sync(P).catch(e => console.warn('[online] sync', e.message)); } return s; });
+    return ON.connect().then(s => { const fresh = s && s !== online; online = s; if (fresh && P) { s.adopt(P); persist(); if (s.hasNickname()) s.sync(P).catch(e => console.warn('[online] sync', e.message)); refSync(true); } return s; });
   }
   function onlineAfterMatch(cfg, res) {
-    if (!ON || !P) return; ON.trackScore(P, res.player.total, now()); persist();
+    if (!ON || !P) return; ON.trackScore(P, res.player.total, now()); persist(); refQualify();
     if (!online || !online.hasNickname()) return;
     if (cfg.online) online.reportMatch(P, cfg.opp, cfg.prep, res, cfg.alley).then(r => { persist(); toast(`Online Elo ${r.after} (${r.delta >= 0 ? '+' : ''}${r.delta})`); if (current === 'pvp') RENDER.pvp(); })
       .catch(e => { console.warn('[online] report', e.message); toast('Could not save the online result. Check your connection.'); });
@@ -1912,12 +2080,12 @@ button,.btn,select{min-height:44px}
       <div class="card"><h2>Create your bowler</h2><input id="nameIn" type="text" maxlength="16" placeholder="Your bowler name" value="">
       <p class="muted">Use a nickname, not your real name. Everything saves on this device.</p><div class="row" id="lookRow"></div>
       ${ageSelect()}
-      <button class="btn green" id="startBtn" style="margin-top:10px">Start my bowling career!</button></div>
+      <button class="btn green" id="startBtn" style="margin-top:10px">Start my bowling career!</button>${pendingRef() ? `<p class="muted" id="refNote">🎟️ Friend code <b>${esc(pendingRef())}</b> is saved. Use it in 🤝 Friends for bonus gems.</p>` : ''}</div>
       <div class="card muted">Bowling is auto-played: your stats, gear, special shots and the oil pattern decide every roll. Train, win, level up with no stat cap, and climb from Local Rookie to PBA Champion.</div>`;
     const looks = [0, 1, 2, 3].map(i => lookFor('look' + i * 7)); let sel = 0; const lr = $('#lookRow');
     looks.forEach((lk, i) => { const c = avatar(lk, 56); c.style.borderRadius = '50%'; c.style.cursor = 'pointer'; c.style.background = i === sel ? '#ddd6fe' : '#fff'; c.onclick = () => { sel = i; [...lr.children].forEach((x, j) => (x.style.background = j === sel ? '#ddd6fe' : '#fff')); }; lr.appendChild(c); });
     $('#startBtn').onclick = () => { const age = $('#ageIn').value; if (age === '') { toast('Please choose your age first'); $('#ageIn').focus(); return; }
-      const n = $('#nameIn').value.trim() || 'Rookie'; P = C.newPlayer(n); P.look = looks[sel]; C.setAgeGroup(P, age); C.dailyCheck(P, now()); persist(); bootServices();
+      const n = $('#nameIn').value.trim() || 'Rookie'; P = C.newPlayer(n); P.createdAt = now().getTime(); P.look = looks[sel]; C.setAgeGroup(P, age); C.dailyCheck(P, now()); persist(); bootServices();
       modal(`<h2>Welcome, ${esc(P.name)}!</h2>` + dialog(hal().look, `Coach Hal: "I'm Hal Quimby - I bowled on tour for thirty years. Win matches, train at the Practice Alley, and there's no limit to how good you can get. Oh, and watch out for a show-off named Brock... Let me show you around!"`), [{ label: "Let's go!", cls: 'green', id: 'welcomeBtn', fn: () => { C.tutStart(P); persist(); show('hub'); } }]); fillAvatars($('#modal')); };
   };
   RENDER.hub = () => {
@@ -1926,7 +2094,7 @@ button,.btn,select{min-height:44px}
     const B = (go, ic, label, cls, dot) => `<button class="btn big ${cls}" data-go="${go}"><span class="ic">${ic}</span>${label}${dot ? ' 🔴' : ''}</button>`;
     $('#hub').innerHTML = topbar() + `<div class="card row"><span id="hubAv"></span><div class="grow"><b>${done ? '🏆 PBA Champion!' : 'Chapter ' + ch.id + ': ' + ch.title}</b><div class="muted">${P.wins} wins · ${P.matches} matches · best ${P.best} · 🔥 ${P.daily.streak}-day streak</div></div></div>
     <div class="grid3">${B('story', '📖', 'Story', 'orange')}${B('pvp', '⚔️', 'PvP (sim)', 'blue')}${B('training', '🏋️', 'Practice', 'green')}${B('daily', '📅', 'Daily', 'pink', dailyReady)}${B('club', '🛡️', 'Club & League', '')}${B('skills', '💥', 'Special Shots', 'orange')}${B('shop', '🛍️', 'Pro Shops', 'pink')}${B('style', '👕', 'Style Shop', 'blue')}${B('gear', '🎒', 'My Gear', 'green')}${B('guide', '🛢️', 'Lane Guide', '')}${B('alleys', '🗺️', 'Alleys', 'orange')}${B('stats', '📊', 'Stats', 'green')}</div>
-    <div class="grid" style="margin-top:8px"><button class="btn big" data-go="leaderboard"><span class="ic">🏅</span>Leaderboard</button><button class="btn big blue" data-go="settings"><span class="ic">⚙️</span>Settings</button></div>
+    <div class="grid3" style="margin-top:8px">${B('leaderboard', '🏅', 'Leaderboard', '')}${B('friends', '🤝', 'Friends', 'green', !!pendingRef() && !P.referral.claim && C.refWindowOpen(P, now().getTime()))}${B('settings', '⚙️', 'Settings', 'blue')}</div>
     <p class="muted" style="text-align:center">Prototype v${D.APP_VERSION} · saves to this device · <a href="#" id="resetLink">reset save</a></p>`;
     $('#hubAv').appendChild(avatar(playerLook(), 52));
     $('#hub').querySelectorAll('[data-go]').forEach(b => (b.onclick = () => show(b.dataset.go)));
@@ -2062,7 +2230,7 @@ button,.btn,select{min-height:44px}
     if (onlineOn() && !online) connectOnline().then(s => { if (s && current === 'settings') RENDER.settings(); });
     const nb = $('#nameBtn'); if (nb) nb.onclick = () => nameBuilder(() => RENDER.settings());
     const ap = $('#adPrivacy'); if (ap) ap.onclick = () => MON.showPrivacyOptions();
-    const del = $('#delOnline'); if (del) del.onclick = () => modal('<h2>Delete my online data?</h2><p>This permanently deletes your online name, scores, rating, match history and anonymous Player ID from our server, and removes you from leaderboards. Your bowler on this device stays.</p>',
+    const del = $('#delOnline'); if (del) del.onclick = () => modal('<h2>Delete my online data?</h2><p>This permanently deletes your online name, scores, rating, match history, friend code and anonymous Player ID from our server, and removes you from leaderboards. Your bowler on this device stays.</p>',
       [{ label: 'Delete online data', cls: 'orange', id: 'delConfirm', fn: async () => { try { await online.deleteOnlineData(P); online = null; persist(); toast('Your online data was deleted'); } catch (e) { toast('Could not reach the server. Try again later.'); } if (current === 'settings') RENDER.settings(); } }, { label: 'Cancel', cls: 'gray' }]);
     $('#resetLocal').onclick = () => modal('<h2>Erase this device\'s save?</h2><p>This erases your bowler, coins and progress on this device. It does not delete online data (use "Delete my online data" for that). Remove Ads can be restored with Restore Purchases.</p>',
       [{ label: 'Erase', cls: 'orange', id: 'resetConfirm', fn: () => { localStorage.removeItem(C.SAVE_KEY); localStorage.removeItem(C.LEGACY_SAVE_KEY); location.reload(); } }, { label: 'Cancel', cls: 'gray' }]);
@@ -2145,24 +2313,117 @@ button,.btn,select{min-height:44px}
     $('#leagueNight').onclick = () => { const r = C.leagueNight(P, Date.now() >>> 0, now()); persist(); modal(`<h2>League Night</h2><p>${C.alleyPattern(r.alley).name}: <b>${r.games.join(' · ')}</b></p><p>Series <b>${r.series}</b> added to ${esc(P.club.name)}. +${r.xp} XP to every stat, +${r.coins} coins.</p><p class="muted">Carrydown builds across all 3 games, so later games are harder to read.</p>`, [{ label: 'OK', fn: () => RENDER.club() }]); };
     $('#leaveClub').onclick = () => { C.leaveClub(P); persist(); RENDER.club(); };
   };
+  // ---------- Friends: invite with a friend code (v0.6) ----------
+  // No chat, no contacts, no personal data: a 6-character code derived from the anonymous Player ID. Rewards are in-game only,
+  // never for reviews/ratings/installing other apps, and inviting is never needed to progress. Rules: see D.REFERRAL + firestore.rules.
+  const REF_KEY = 'pm_pending_ref';
+  const refState = { friends: null, err: null, busy: false };
+  function pendingRef() { try { return localStorage.getItem(REF_KEY) || ''; } catch (e) { return ''; } }
+  // https://.../?ref=CODE prefills the code (kept until used), then the param is removed from the address bar.
+  function captureRefParam() {
+    try { const u = new URL(location.href); if (!u.searchParams.has('ref')) return; const r = C.refNormalize(u.searchParams.get('ref'));
+      if (C.refValidCode(r)) localStorage.setItem(REF_KEY, r); u.searchParams.delete('ref'); history.replaceState(null, '', u.pathname + u.search + u.hash); } catch (e) { /* ignore */ }
+  }
+  const refStrict = () => !!(window.PM_CONFIG && PM_CONFIG.referral && PM_CONFIG.referral.requireServerVerify);
+  const kidMode = () => { const ag = P && P.privacy && P.privacy.ageGroup; return !ag || ag === 'child'; };
+  const cosIcon = c => c.type === 'celebration' ? `<span style="font-size:26px">${CEL_ICON[c.fx] || '🎉'}</span>` : swatch([c.color, c.color2 || '#fff']);
+  // Invited player: tell the server once they've played enough (rule also wants >= 60 s after the claim). Retries on the next match/open.
+  async function refQualify() {
+    if (!online || !P || !C.refFriendReady(P, now().getTime())) return false;
+    try { await online.qualifyReferral(); C.refMarkQualified(P); persist(); toast('🤝 Your friend just earned their invite reward!'); if (current === 'friends') RENDER.friends(); return true; }
+    catch (e) { console.warn('[online] referral qualify', e.message); return false; }
+  }
+  // Referrer: make sure we have a code, then credit friends who counted (client-side fallback; idempotent via P.referral.credited).
+  async function refSync(quiet) {
+    if (!online || !P || refState.busy) return; refState.busy = true;
+    try {
+      await online.referralSetup(); refState.err = null; await refQualify();
+      const fr = await online.referralFriends(); refState.friends = fr;
+      const ok = fr.filter(f => f.qualified && (refStrict() ? f.verified === true : f.verified !== false)).map(f => f.id);
+      const got = C.refCredit(P, ok); persist();
+      if (got.gems) { sfx('coin'); const names = got.cosmetics.map(id => C.cosById(id).name);
+        const msg = `${got.friends} friend${got.friends === 1 ? '' : 's'} finished their first matches: +💎 ${got.gems}${names.length ? ' and ' + names.join(', ') : ''}!`;
+        if (current === 'friends' && !$('#modal').classList.contains('show')) modal(`<h2>🤝 Friend bonus!</h2><p>${esc(msg)}</p>`, [{ label: 'Awesome!', cls: 'green', id: 'refBonusOk' }]); else toast('🤝 ' + msg); }
+    } catch (e) { refState.err = e; console.warn('[online] referral', e && e.message); }
+    refState.busy = false; if (current === 'friends') RENDER.friends();
+  }
+  function copyText(txt) {
+    const legacy = () => { const ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (e) {} ta.remove(); return ok; };
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(txt).then(() => true, legacy);
+    return Promise.resolve(legacy());
+  }
+  async function shareInvite(code) {
+    const s = C.refShare(code), N = window.PMNative, native = !!(N && N.Share && N.Capacitor && N.Capacitor.isNativePlatform && N.Capacitor.isNativePlatform());
+    window.__lastShare = s;   // test hook
+    try {
+      if (native) { await N.Share.share({ title: s.title, text: s.text, url: s.url, dialogTitle: 'Invite a friend' }); return; }
+      if (navigator.share) { await navigator.share(s); return; }
+    } catch (e) { if (/abort|cancel/i.test((e && (e.name + ' ' + e.message)) || '')) return; }
+    await copyText(s.text + ' ' + s.url); toast('Invite copied! Paste it in a message to a friend.');
+  }
+  RENDER.friends = () => {
+    const R = D.REFERRAL, r = P.referral, on = onlineOn(), code = online && online.referral && online.referral.code, t = now().getTime();
+    const rewarded = C.refRewarded(P), fr = refState.friends || [], waiting = fr.filter(f => !f.qualified).length;
+    const nb = C.cosById(R.newPlayer.cosmetic);
+    let html = topbar() + `<h2>🤝 Invite Friends</h2>`;
+    if (!on) html += `<div class="card" id="refOffline" style="background:#fef3c7">🔌 <b>Friend codes need online play</b>, which isn't switched on in this version yet. Everything else works offline. Here's what inviting friends will unlock:</div>`;
+    html += `<div class="card" style="text-align:center" id="refCodeCard"><div class="muted"><b>Your friend code</b></div><div class="refcode" id="myCode">${code ? esc(code) : on ? (refState.err ? '⚠️' : '······') : '------'}</div>` +
+      (on && !code ? `<div class="muted" id="refStatus">${refState.err ? 'Could not reach the server. <button class="btn small gray" id="refRetry">Retry</button>' : 'Getting your code...'}</div>` : '') +
+      `<div class="grid" style="margin-top:8px"><button class="btn green" id="refShare" ${code ? '' : 'disabled'}>📤 Share invite</button><button class="btn blue" id="refCopy" ${code ? '' : 'disabled'}>📋 Copy code</button></div>` +
+      `<div class="muted" style="margin-top:8px">Your friend gets <b>💎 ${R.newPlayer.gems}</b> + the <b>${esc(nb.name)}</b> ball design. You get <b>💎 ${R.perFriend}</b> when they finish ${R.qualifyMatches} matches.</div></div>`;
+    html += `<h2>🎁 Friend rewards</h2><div class="card" id="refTiers"><div class="row"><b class="grow">Friends who counted</b><span class="tag ok" id="refCount">${rewarded} / ${R.maxFriends}</span></div><div class="bar" style="margin:6px 0"><i style="width:${Math.round(rewarded * 100 / R.maxFriends)}%"></i></div>` +
+      (waiting ? `<div class="muted">⏳ ${waiting} friend${waiting === 1 ? ' is' : 's are'} still playing their first ${R.qualifyMatches} matches.</div>` : '') +
+      R.tiers.map(tr => { const c = C.cosById(tr.cosmetic), done = r.tiers.includes(tr.friends);
+        return `<div class="row tier ${done ? 'done' : ''}"><span class="tierN">${tr.friends}</span>${cosIcon(c)}<div class="grow"><b>${esc(c.name)}</b><div class="muted">${c.type === 'celebration' ? 'Celebration' : c.type === 'outfit' ? 'Outfit' : 'Ball design'} + 💎 ${tr.gems}${tr.friends === R.maxFriends ? ' · exclusive' : ''}</div></div>${done ? '<span class="tag ok">Unlocked</span>' : `<span class="tag">${tr.friends} friend${tr.friends === 1 ? '' : 's'}</span>`}</div>`; }).join('') +
+      `<div class="muted" style="margin-top:6px">💎 ${R.perFriend} per friend plus the bonuses above. Rewards stop after ${R.maxFriends} friends (💎 ${C.refMaxGems()} max).${r.gemsEarned ? ` You've earned 💎 ${r.gemsEarned}.` : ''}</div></div>`;
+    html += `<h2>🎟️ Got a friend's code?</h2><div class="card" id="refClaim">`;
+    if (r.claim) { const left = C.refMatchesLeft(P);
+      html += `<div class="row"><span style="font-size:28px">✅</span><div class="grow"><b>You used code ${esc(r.claim.code)}</b><div class="muted">${r.qualified ? 'Your friend got their reward. Thanks for joining!' : left > 0 ? `Finish ${left} more match${left === 1 ? '' : 'es'} and your friend gets their reward too.` : 'Your friend\'s reward is on its way.'}</div></div></div>`; }
+    else if (!C.refWindowOpen(P, t)) html += `<div class="muted">Friend codes can be entered during your first ${R.windowDays} days. That time has passed, but you can still invite friends with your own code!</div>`;
+    else { const d = C.refDaysLeft(P, t);
+      html += `<div class="row" style="gap:8px"><input type="text" id="refIn" maxlength="8" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="ABC234" value="${esc(pendingRef())}" ${on ? '' : 'disabled'} aria-label="Friend code"><button class="btn green" id="refUse" style="width:auto;flex:none" ${on ? '' : 'disabled'}>Use code</button></div>` +
+        `<div class="muted" style="margin-top:6px">You get <b>💎 ${R.newPlayer.gems}</b> + <b>${esc(nb.name)}</b>. One code per player · ${d} day${d === 1 ? '' : 's'} left to use one.</div>`; }
+    html += `</div><div class="card muted" style="font-size:12px">Inviting is optional: you never need friends to progress. Rewards are in-game only. No chat, no contact lists and no personal info, just a 6-character code.${kidMode() ? ' 🧒 Ask a grown-up before sharing.' : ''}</div>`;
+    $('#friends').innerHTML = html;
+    const go = (id, fn) => { const e = $('#' + id); if (e) e.onclick = fn; };
+    go('refRetry', () => { refState.err = null; RENDER.friends(); });
+    go('refShare', () => { if (!code) return; const doIt = () => shareInvite(code); if (kidMode()) parentGate(doIt, 'Sharing an invite sends a message outside the game, so a grown-up should say OK.'); else doIt(); });
+    go('refCopy', () => code && copyText(code).then(() => toast('Code ' + code + ' copied!')));
+    go('refUse', async () => {
+      const inp = $('#refIn'), b = $('#refUse'); const chk = C.refCanEnter(P, inp.value, now().getTime(), code); if (!chk.ok) { sfx('denied'); return toast(chk.reason); }
+      if (!online) { toast('Connecting... try again in a moment'); connectOnline(); return; }
+      b.disabled = true; b.textContent = '...';
+      try { const res = await online.claimReferral(P, chk.code);
+        if (!res.ok) { sfx('denied'); toast(res.reason); if (res.already && !P.referral.claim) { P.referral.claim = { code: chk.code, at: now().getTime(), matchesAt: P.matches }; persist(); } RENDER.friends(); return; }
+        const g = C.refApplyClaim(P, res.code, now().getTime()); try { localStorage.removeItem(REF_KEY); } catch (e) {} persist(); sfx('coin');
+        modal(`<h2>🎉 Welcome bonus!</h2><p>Code <b>${esc(res.code)}</b> accepted: <b>+💎 ${g.gems}</b>${g.cosmetic ? ` and the <b>${esc(C.cosById(g.cosmetic).name)}</b> ball design` : ''}!</p><p class="muted">Finish ${R.qualifyMatches} matches and your friend gets a reward too.</p>`,
+          [...(g.cosmetic ? [{ label: 'Use Buddy Bowl', cls: 'green', id: 'refEquip', fn: () => { C.equipCosmetic(P, g.cosmetic); persist(); RENDER.friends(); } }] : []), { label: 'OK', cls: g.cosmetic ? 'gray' : 'green', id: 'refOk', fn: () => RENDER.friends() }]);
+        RENDER.friends();
+      } catch (e) { console.warn('[online] referral claim', e && e.message); toast('Could not reach the server. Try again later.'); RENDER.friends(); }
+    });
+    if (on && !online && !refState.err) connectOnline().then(s => { if (!s) refState.err = new Error('offline'); if (current === 'friends') RENDER.friends(); });
+    else if (online && !refState.busy && !refState.err && (!code || refState.friends === null)) refSync(true);
+  };
   // ---------- Style shop (cosmetics, gems, Remove Ads) ----------
   let styleTab = 'outfit';
-  function parentGate(onPass) {
+  const CEL_ICON = { thumbs: '👍', confetti: '🎊', stars: '⭐', fireworks: '🎆', disco: '🪩', highfive: '🙌' };
+  function parentGate(onPass, why) {
     const a = 3 + Math.floor(Math.random() * 6), b = 4 + Math.floor(Math.random() * 5);
-    modal(`<h2>👨‍👩‍👧 Ask a grown-up</h2><p>Purchases need a parent. (Placeholder gate. A shipped app would use the platform's Ask to Buy / Family Link plus a stronger gate.)</p><p><b>What is ${a} × ${b}?</b></p><input type="text" id="pgIn" inputmode="numeric" autocomplete="off">`,
+    modal(`<h2>👨‍👩‍👧 Ask a grown-up</h2><p>${why || 'Purchases need a parent.'} (Placeholder gate. A shipped app would use the platform's Ask to Buy / Family Link plus a stronger gate.)</p><p><b>What is ${a} × ${b}?</b></p><input type="text" id="pgIn" inputmode="numeric" autocomplete="off">`,
       [{ label: 'Continue', cls: 'green', keep: true, fn: () => { if (parseInt($('#pgIn').value, 10) === a * b) { closeModal(); onPass(); } else toast('Not quite - ask a grown-up!'); } }, { label: 'Cancel', cls: 'gray' }]);
   }
   RENDER.style = () => {
     let html = topbar() + (storeLive() ? '' : `<div class="banner">DEMO — NO REAL PURCHASES. Prices show how the real store would look. Nothing is charged.</div>`) + `<h2>👕 Style Shop</h2><div class="card muted">Cosmetics have <b>no stat effects</b>. Buy with coins or gems. No loot boxes: you always know exactly what you get.</div><div class="tabs">${[['outfit', '👕 Outfits'], ['ball', '🎳 Ball designs'], ['celebration', '🎉 Celebrations']].map(([k, l]) => `<button class="btn ${k === styleTab ? 'sel' : ''}" data-st="${k}">${l}</button>`).join('')}</div>`;
     D.COSMETICS.filter(c => c.type === styleTab).forEach(c => { const own = P.cosmetics.includes(c.id), eq = P.cos[c.type] === c.id;
-      const icon = c.type === 'celebration' ? `<span style="font-size:26px">${{ thumbs: '👍', confetti: '🎊', stars: '⭐', fireworks: '🎆', disco: '🪩' }[c.fx]}</span>` : c.color ? swatch(c.color === 'rainbow' ? ['#a855f7', '#facc15'] : [c.color, c.color2 || '#fff']) : swatch(['#94a3b8', '#fff']);
-      html += `<div class="card row">${icon}<div class="grow"><b>${esc(c.name)}</b><div class="muted">Cosmetic only</div></div>${own ? (eq ? '<span class="tag ok">Equipped</span>' : `<button class="btn small green" data-ceq="${c.id}">Equip</button>`) : `<button class="btn small" data-cbuy="${c.id}">${c.gems ? '💎 ' + c.gems : '🪙 ' + c.coins}</button>`}</div>`; });
+      const icon = c.type === 'celebration' ? `<span style="font-size:26px">${CEL_ICON[c.fx]}</span>` : c.color ? swatch(c.color === 'rainbow' ? ['#a855f7', '#facc15'] : [c.color, c.color2 || '#fff']) : swatch(['#94a3b8', '#fff']);
+      html += `<div class="card row">${icon}<div class="grow"><b>${esc(c.name)}</b><div class="muted">Cosmetic only</div></div>${own ? (eq ? '<span class="tag ok">Equipped</span>' : `<button class="btn small green" data-ceq="${c.id}">Equip</button>`) : (c.referral ? '<button class="btn small gray" data-go="friends">🤝 Friend reward</button>' : `<button class="btn small" data-cbuy="${c.id}">${c.gems ? '💎 ' + c.gems : '🪙 ' + c.coins}</button>`)}</div>`; });
     if (styleTab === 'ball' && P.cos.ball) html += `<button class="btn small gray" data-ceq="">Use brand colors</button>`;
     html += `<h2>🚫 Remove Ads</h2><div class="card row" id="removeAdsCard"><span style="font-size:28px">🚫</span><div class="grow"><b>Remove Ads — $${D.REMOVE_ADS.usd.toFixed(2)}</b><div class="muted">One-time (non-consumable). Removes banners and between-match ads. Optional reward ads stay available.</div></div>${P.entitlements.removeAds ? '<span class="tag ok">Owned</span>' : `<button class="btn small blue" id="buyRemoveAds">${storeLive() ? MON.price(D.REMOVE_ADS.sku, D.REMOVE_ADS.usd) : '$' + D.REMOVE_ADS.usd.toFixed(2) + ' (demo)'}</button>`}</div><button class="btn small gray" id="restoreBtn">Restore Purchases</button>`;
     html += `<h2>💎 Gems</h2>`;
     D.GEM_PACKS.forEach(g => (html += `<div class="card row"><span style="font-size:28px">💎</span><div class="grow"><b>${g.gems} Gems</b><div class="muted">${g.label}</div></div><button class="btn small blue" data-pack="${g.id}">${storeLive() ? MON.price(g.sku, g.usd) : '$' + g.usd.toFixed(2) + ' (demo)'}</button></div>`));
     D.PREMIUM_ITEMS.forEach(it => (html += `<div class="card row"><span style="font-size:26px">${it.type === 'coins' ? '🪙' : '⚡'}</span><div class="grow"><b>${esc(it.name)}</b><div class="muted">Convenience, no stat power</div></div><button class="btn small" data-prem="${it.id}">💎 ${it.gems}</button></div>`));
     $('#style').innerHTML = html;
+    $('#style').querySelectorAll('[data-go]').forEach(b => (b.onclick = () => show(b.dataset.go)));
     $('#style').querySelectorAll('[data-st]').forEach(b => (b.onclick = () => { styleTab = b.dataset.st; RENDER.style(); }));
     $('#style').querySelectorAll('[data-cbuy]').forEach(b => (b.onclick = () => { const r = C.buyCosmetic(P, b.dataset.cbuy); toast(r.msg); sfx(r.ok ? 'coin' : 'denied'); if (r.ok) { C.equipCosmetic(P, b.dataset.cbuy); persist(); RENDER.style(); } }));
     $('#style').querySelectorAll('[data-ceq]').forEach(b => (b.onclick = () => { if (b.dataset.ceq) C.equipCosmetic(P, b.dataset.ceq); else P.cos.ball = null; persist(); RENDER.style(); }));
@@ -2398,12 +2659,13 @@ button,.btn,select{min-height:44px}
     const obs = new MutationObserver(() => document.querySelectorAll('.back').forEach(b => (b.style.display = $('#' + b.dataset.for).classList.contains('active') && b.dataset.for !== 'hub' ? 'block' : 'none')));
     document.querySelectorAll('.screen').forEach(s => obs.observe(s, { attributes: true, attributeFilter: ['class'] }));
     document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('button, .btn, select, canvas[style*="pointer"]'); if (!b || b.disabled) return; if (b.classList.contains('sndbtn')) show('settings'); sfx('click'); });
+    captureRefParam();
     P = C.load(); if (P && !P.version) P = null;
     if (P) { C.unlockSkills(P); C.restorePurchases(P, localStorage); C.dailyCheck(P, now()); tutBootFix(); persist(); show('hub');
       const next = () => { bootServices(); if (C.tutShouldOffer(P)) offerTour(); };
       if (!P.privacy.ageGroup) askAge(next); else next(); } else show('create');
   }
-  window.StrikeQuest = window.PinMasters = { getPlayer: () => P, online: () => online, audio: AU, show, toast, laneDemo, preMatch, save: persist, version: D.APP_VERSION,
+  window.StrikeQuest = window.PinMasters = { getPlayer: () => P, online: () => online, refSync, audio: AU, show, toast, laneDemo, preMatch, save: persist, version: D.APP_VERSION,
     tutorial: { step: () => (C.tutStep(P) || {}).id || null, state: () => P && P.tutorial, refresh: tutRefresh } };
   document.addEventListener('DOMContentLoaded', boot);
 })();
