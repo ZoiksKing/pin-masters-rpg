@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.7.1"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.8.0"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -112,6 +112,9 @@ button,.btn,select{min-height:44px}
 #refIn{text-transform:uppercase;letter-spacing:5px;text-align:center;font-weight:900;font-family:ui-monospace,Menlo,Consolas,monospace}
 .tier-badge{display:inline-block;color:#fff;font-size:13px;font-weight:800;padding:3px 10px;border-radius:999px;letter-spacing:.3px}
 .col-btns{display:flex;flex-direction:column;gap:4px;align-items:stretch}.prem-item{border-left:4px solid #a855f7}
+
+.flair{display:inline-block;font-size:13px;line-height:18px;min-width:20px;text-align:center;border:2px solid #cbd5e1;border-radius:8px;padding:0 2px;margin-left:3px;background:#fff}
+table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
 </style></head>
 <body><div id="app">
 <section class="screen" id="create"></section><section class="screen" id="hub"></section><section class="screen" id="story"></section>
@@ -407,8 +410,34 @@ button,.btn,select{min-height:44px}
     { id: 'ball_buddy', type: 'ball', name: 'Buddy Bowl', color: '#06d6a0', color2: '#ffd166', referral: true },
     { id: 'out_squad', type: 'outfit', name: 'Squad Jacket', color: '#118ab2', referral: true },
     { id: 'cel_highfive', type: 'celebration', name: 'High Five', fx: 'highfive', referral: true },
-    { id: 'ball_friendship', type: 'ball', name: 'Friendship Galaxy', color: '#ef476f', color2: '#7b2cbf', referral: true }
+    { id: 'ball_friendship', type: 'ball', name: 'Friendship Galaxy', color: '#ef476f', color2: '#7b2cbf', referral: true },
+    // Season ball LOOKS (v0.8): earned by finishing a season in the top 25% (Pro or better). Can't be bought. Color only, NO stats.
+    { id: 'ball_s_aurora', type: 'ball', name: 'Aurora Season Ball', color: '#2dd4bf', color2: '#a78bfa', season: true },
+    { id: 'ball_s_ember', type: 'ball', name: 'Ember Season Ball', color: '#f97316', color2: '#fde047', season: true },
+    { id: 'ball_s_glacier', type: 'ball', name: 'Glacier Season Ball', color: '#38bdf8', color2: '#f0f9ff', season: true },
+    { id: 'ball_s_nebula', type: 'ball', name: 'Nebula Season Ball', color: '#db2777', color2: '#312e81', season: true }
   ];
+  // Leaderboard rewards (v0.8). Weekly + Season "best single game" boards only (NOT the all-time Rating board, NOT PvP Elo).
+  // Periods are fixed UTC blocks: weeks start Monday 00:00 UTC (same boundary as ISO weeks); a season = 4 weeks (28 days).
+  // Gems are kept small next to the ~130 free gems/week (daily streak + challenges), and nothing here is ever stat gear.
+  const LB_REWARDS = {
+    mode: 'client',               // 'client' = Spark plan (device works out its own tier, rules sanity-check it); 'server' = Blaze Cloud Function writes rewards
+    epochMs: 345600000,           // Monday 1970-01-05 00:00 UTC: week 0
+    weekMs: 604800000, seasonWeeks: 4,
+    seasonBase: 740,              // season number 741 (starts Mon 2026-10-26) is shown as "Season 1"; 740 is the "Preseason"
+    minGames: { week: 5, season: 15 },     // qualifying games (any finished match: story, exhibition, PvP, ranked PvP) to earn anything
+    claimWindow: 2,               // a finished period can be claimed until 2 more periods have passed
+    tiers: [
+      { id: 'champion', name: 'Champion', icon: '🏆', top: 1, minPlayers: 20, week: 60, season: 200, frame: 'gold' },
+      { id: 'elite', name: 'Elite', icon: '💎', top: 10, minPlayers: 10, week: 40, season: 120, frame: 'purple' },
+      { id: 'pro', name: 'Pro', icon: '⭐', top: 25, minPlayers: 4, week: 25, season: 75, frame: 'blue' },
+      { id: 'participation', name: 'Participant', icon: '🎳', top: 100, minPlayers: 1, week: 10, season: 30, frame: null }
+    ],
+    top3: { minPlayers: 10, week: [15, 10, 5], season: [50, 30, 20] },   // small extra for #1/#2/#3 (ties share the better place)
+    frames: { gold: { name: 'Champion Gold', color: '#f59e0b' }, purple: { name: 'Elite Purple', color: '#a855f7' }, blue: { name: 'Pro Blue', color: '#3b82f6' } },
+    seasonBalls: ['ball_s_aurora', 'ball_s_ember', 'ball_s_glacier', 'ball_s_nebula'],   // rotates: season number mod 4
+    simPlayers: { week: 160, season: 240 }      // offline / no-Firebase simulated boards
+  };
   // Friend referral program (v0.6). Rewards are in-game only (gems + cosmetics with NO stat effects). Never for reviews, ratings or
   // installing other apps, and inviting is never needed to progress. Codes are 6 characters with no vowels and no look-alikes (0/O, 1/I/L).
   const REFERRAL = {
@@ -496,7 +525,7 @@ button,.btn,select{min-height:44px}
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.7.1';
+  const APP_VERSION = '0.8.0';
   const TUTORIAL = {
     reward: 100,
     steps: [
@@ -530,7 +559,7 @@ button,.btn,select{min-height:44px}
     }
   };
 
-  return { APP_VERSION, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, REFERRAL, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, PREMIUM_GEAR, PREMIUM_TIERS, PREMIUM_CAP, PREMIUM_COIN_RATE, GEM_INCOME, GEM_BOOSTS, RIVAL_FIRST, RIVAL_LAST };
+  return { APP_VERSION, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, LB_REWARDS, REFERRAL, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, PREMIUM_GEAR, PREMIUM_TIERS, PREMIUM_CAP, PREMIUM_COIN_RATE, GEM_INCOME, GEM_BOOSTS, RIVAL_FIRST, RIVAL_LAST };
 });
 </script><script>/* Pin Masters RPG core logic: pure functions (no DOM) so it can be unit-tested in Node
  * and later run on a server for authoritative PvP. */
@@ -799,6 +828,7 @@ button,.btn,select{min-height:44px}
     // v0.6 friend program. Older saves get their 7-day "enter a friend's code" window from the day they update.
     p.createdAt = p.createdAt || Date.now();
     p.referral = p.referral || { claim: null, qualified: false, credited: [], tiers: [], gemsEarned: 0, extra: 0 };
+    lbEnsure(p);   // v0.8 leaderboard rewards
     return p;
   }
   // ---------- Tutorial (status: new -> active -> done | skipped; legacy = old save; declined = said no to the offer) ----------
@@ -1043,6 +1073,7 @@ button,.btn,select{min-height:44px}
   function buyCosmetic(p, id) {
     const c = cosById(id); if (!c) return { ok: false, msg: 'Unknown' }; if (p.cosmetics.includes(id)) return { ok: false, msg: 'Owned' };
     if (c.referral) return { ok: false, msg: 'Earn this by inviting friends' };
+    if (c.season) return { ok: false, msg: 'Earn this on the Season leaderboard' };
     if (c.gems) { if (p.gems < c.gems) return { ok: false, msg: 'Not enough gems' }; p.gems -= c.gems; } else { if (p.coins < (c.coins || 0)) return { ok: false, msg: 'Not enough coins' }; p.coins -= c.coins || 0; }
     p.cosmetics.push(id); return { ok: true, msg: 'Unlocked ' + c.name };
   }
@@ -1151,6 +1182,121 @@ button,.btn,select{min-height:44px}
     rows.sort((a, b) => b.rating - a.rating); rows.forEach((r, i) => { r.rank = i + 1; r.tier = tierOf(r.rating); });
     return rows;
   }
+
+  // ---------- Leaderboard rewards (v0.8). Pure logic: period math, tier math, simulated boards, local claims. ----------
+  // Weekly + Season boards rank your BEST SINGLE GAME of the period. Rank = 1 + number of strictly higher scores (ties share the
+  // better place). Percentile tiers need a minimum board size so a 3-player board can't hand out "Top 1%".
+  const LBR = () => D.LB_REWARDS;
+  const lbWeekNo = ms => Math.floor((ms - LBR().epochMs) / LBR().weekMs);
+  const lbSeasonNo = ms => Math.floor(lbWeekNo(ms) / LBR().seasonWeeks);
+  const lbKindOf = id => (String(id)[0] === 's' ? 'season' : 'week');
+  function lbPeriod(kind, ms) { return kind === 'season' ? 's' + lbSeasonNo(ms) : 'w' + lbWeekNo(ms); }
+  function lbPeriodInfo(id) {
+    const R = LBR(), kind = lbKindOf(id), n = parseInt(String(id).slice(1), 10), w0 = kind === 'season' ? n * R.seasonWeeks : n;
+    const start = R.epochMs + w0 * R.weekMs, end = start + (kind === 'season' ? R.seasonWeeks : 1) * R.weekMs;
+    return { id: String(id), kind, n, start, end, label: lbLabel(id) };
+  }
+  function lbLabel(id) {
+    const kind = lbKindOf(id), n = parseInt(String(id).slice(1), 10);
+    if (kind === 'season') { const s = n - LBR().seasonBase; return s <= 0 ? 'Preseason' : 'Season ' + s; }
+    const d = new Date(LBR().epochMs + n * LBR().weekMs); return 'Week of ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  }
+  const lbPrev = (id, k) => String(id)[0] + (parseInt(String(id).slice(1), 10) - (k || 1));
+  const lbResetIn = (kind, ms) => lbPeriodInfo(lbPeriod(kind, ms)).end - ms;
+  // A closed period may be claimed while it's one of the last `claimWindow` periods (firestore.rules checks the same thing).
+  function lbClaimable(id, ms) { const cur = parseInt(lbPeriod(lbKindOf(id), ms).slice(1), 10), n = parseInt(String(id).slice(1), 10); return n < cur && cur - n <= LBR().claimWindow; }
+  function lbRankOf(value, values) { let above = 0; values.forEach(v => { if (v > value) above++; }); return above + 1; }
+  // Tier for a rank on a board of `total` players. null = didn't play the minimum games (or bad input).
+  function lbTier(kind, rank, total, games) {
+    const R = LBR(); kind = kind === 'season' ? 'season' : 'week';
+    if (!(games >= R.minGames[kind]) || !(total >= 1) || !(rank >= 1) || rank > total) return null;
+    const t = R.tiers.find(x => total >= x.minPlayers && (rank - 1) * 100 < x.top * total);
+    const bonus = rank <= 3 && total >= R.top3.minPlayers ? R.top3[kind][rank - 1] : 0;
+    return { kind, tier: t.id, name: t.name, icon: t.icon, rank, total, games, base: t[kind], bonus, gems: t[kind] + bonus };
+  }
+  const lbTierDef = id => LBR().tiers.find(t => t.id === id) || null;
+  const lbSeasonBall = id => LBR().seasonBalls[((parseInt(String(id).slice(1), 10) % LBR().seasonBalls.length) + LBR().seasonBalls.length) % LBR().seasonBalls.length];
+  // Full reward for a period: gems + badge (+ season frame/name color and season ball look for Pro or better). Cosmetic only.
+  function lbReward(id, rank, total, games, value) {
+    const t = lbTier(lbKindOf(id), rank, total, games); if (!t) return null;
+    const season = t.kind === 'season', def = lbTierDef(t.tier);
+    return Object.assign(t, { id: String(id), label: lbLabel(id), value: value || 0, badge: t.kind + '_' + t.tier, frame: season ? def.frame : null, ball: season && t.tier !== 'participation' ? lbSeasonBall(id) : null });
+  }
+  // Server side (Cloud Function) / tests: entries [{uid, value, games}] of one closed period -> reward list (only players who earned one).
+  function computePeriodRewards(entries, id) {
+    const vals = entries.map(e => e.value || 0), total = entries.length; const out = [];
+    entries.forEach(e => { const r = lbReward(id, lbRankOf(e.value || 0, vals), total, e.games || 0, e.value || 0); if (r) out.push(Object.assign({ uid: e.uid }, r)); });
+    return out;
+  }
+  // Offline / no-Firebase: a deterministic simulated board per period (same names as the local board + generated locals).
+  // For the running period, simulated bowlers have only played part of their games so far; at the end it matches the final board.
+  function lbSimBoard(id, ms) {
+    const R = LBR(), kind = lbKindOf(id), info = lbPeriodInfo(id), rng = makeRng(hashStr('lb|' + id));
+    const frac = ms == null || ms >= info.end ? 1 : Math.max(0, Math.min(1, (ms - info.start) / (info.end - info.start)));
+    const n = R.simPlayers[kind], maxG = kind === 'season' ? 70 : 20, rows = [];
+    const named = D.PROS.map(x => ({ name: x.name, skill: 205 + rating(x.stats) / 10 })).concat([{ name: D.RIVAL.name, skill: 215 }]);
+    for (let i = 0; i < n; i++) {
+      const nm = i < named.length ? named[i].name : D.RIVAL_FIRST[Math.floor(rng() * D.RIVAL_FIRST.length)] + ' ' + D.RIVAL_LAST[Math.floor(rng() * D.RIVAL_LAST.length)];
+      const avg = i < named.length ? named[i].skill : 118 + rng.gauss() * 30, finalGames = Math.floor(rng() * (maxG + 1));
+      const games = Math.floor(finalGames * frac); let best = 0;
+      for (let g = 0; g < games; g++) best = Math.max(best, Math.round(avg + rng.gauss() * 18));
+      rng(); if (games > 0) rows.push({ name: nm, value: Math.max(30, Math.min(300, best)), games, sim: true });
+    }
+    return rows;
+  }
+  // Your standing on a board (sim rows + you). Returns rows sorted with shared ranks, plus your rank/total and projected reward.
+  function lbStanding(id, rows, me) {
+    const all = rows.slice(); if (me && me.games > 0) all.push(Object.assign({ you: true }, me));
+    all.sort((a, b) => b.value - a.value || (a.you ? -1 : b.you ? 1 : 0));
+    const vals = all.map(r => r.value); all.forEach(r => (r.rank = lbRankOf(r.value, vals)));
+    const you = all.find(r => r.you) || null, total = all.length;
+    return { id, rows: all, total, you, reward: you ? lbReward(id, you.rank, total, you.games, you.value) : null };
+  }
+  function lbEnsure(p) {
+    p.lb = p.lb || {}; const L = p.lb;
+    L.week = L.week || { id: null, best: 0, games: 0 }; L.season = L.season || { id: null, best: 0, games: 0 };
+    L.pending = L.pending || []; L.claimed = L.claimed || {}; L.trophies = L.trophies || []; L.flair = L.flair === undefined ? null : L.flair;
+    return L;
+  }
+  // Roll over finished periods into `pending` (only if you bowled in them) and drop ones that are too old to claim.
+  function lbRoll(p, ms) {
+    const L = lbEnsure(p);
+    ['week', 'season'].forEach(k => { const id = lbPeriod(k, ms), cur = L[k];
+      if (cur.id !== id) { if (cur.id && cur.games > 0 && !L.claimed[cur.id] && !L.pending.some(x => x.id === cur.id)) L.pending.push({ id: cur.id, best: cur.best, games: cur.games, online: !!cur.online }); L[k] = { id, best: 0, games: 0 }; } });
+    L.pending = L.pending.filter(x => lbClaimable(x.id, ms) && !L.claimed[x.id]);
+    return L;
+  }
+  // Every finished match counts as one qualifying game (story, exhibition, PvP). Practice drills don't.
+  function lbTrack(p, score, ms) {
+    const L = lbRoll(p, ms), v = Math.max(0, Math.min(300, Math.round(score || 0)));
+    ['week', 'season'].forEach(k => { L[k].best = Math.max(L[k].best, v); L[k].games++; });
+    return L;
+  }
+  const lbMe = (p, kind) => { const c = lbEnsure(p)[kind]; return { name: (p.name || 'You') + ' (You)', value: c.best, games: c.games }; };
+  // Offline: rewards waiting from the simulated boards (non-qualifying periods are dropped).
+  function lbPendingLocal(p, ms) {
+    const L = lbRoll(p, ms), out = [];
+    L.pending = L.pending.filter(x => { const st = lbStanding(x.id, lbSimBoard(x.id), { name: (p.name || 'You') + ' (You)', value: x.best, games: x.games }); if (!st.reward) return false; out.push(st.reward); return true; });
+    return out;
+  }
+  // Apply a reward to the save. Exactly one claim per period; returns {ok:false} on a repeat.
+  function lbClaim(p, reward, opts) {
+    const L = lbEnsure(p); if (!reward || !reward.id) return { ok: false, msg: 'Nothing to claim' };
+    if (L.claimed[reward.id]) return { ok: false, msg: 'Already claimed', already: true };
+    const gems = Math.max(0, Math.min(250, reward.gems | 0)); p.gems += gems;
+    const tro = { id: reward.id, kind: reward.kind, tier: reward.tier, rank: reward.rank, total: reward.total, badge: reward.badge, frame: reward.frame || null, online: !!(opts && opts.online) };
+    L.claimed[reward.id] = { tier: reward.tier, gems, at: (opts && opts.now) || Date.now() }; L.trophies.unshift(tro); L.trophies = L.trophies.slice(0, 60);
+    L.pending = L.pending.filter(x => x.id !== reward.id);
+    let ball = null; if (reward.ball && cosById(reward.ball) && !p.cosmetics.includes(reward.ball)) { p.cosmetics.push(reward.ball); ball = reward.ball; }
+    // Auto-wear the new flair if it's at least as good as what you have on.
+    const rankOf = t => (t ? ['participation', 'pro', 'elite', 'champion'].indexOf(t.tier) * 2 + (t.kind === 'season' ? 1 : 0) : -1);
+    const cur = L.flair && L.trophies.find(t => t.id === L.flair.src);
+    if (!cur || rankOf(tro) >= rankOf(cur)) L.flair = { badge: tro.badge, frame: tro.frame, src: tro.id };
+    return { ok: true, gems, ball, trophy: tro, msg: '+' + gems + ' gems' };
+  }
+  function lbWear(p, src) { const L = lbEnsure(p); if (src == null) { L.flair = null; return true; } const t = L.trophies.find(x => x.id === src); if (!t) return false; L.flair = { badge: t.badge, frame: t.frame, src: t.id }; return true; }
+  const lbBadgeInfo = b => { if (!b) return null; const [kind, tier] = String(b).split('_'); const d = lbTierDef(tier); return d ? { icon: d.icon, name: (kind === 'season' ? 'Season ' : 'Weekly ') + d.name, kind, tier } : null; };
+  const lbFrameColor = f => (f && LBR().frames[f] ? LBR().frames[f].color : null);
   function save(p, storage) { (storage || localStorage).setItem(SAVE_KEY, JSON.stringify(p)); }
   function load(storage) { try { const st = storage || localStorage; const s = st.getItem(SAVE_KEY) || st.getItem(LEGACY_SAVE_KEY); return s ? migrate(JSON.parse(s)) : null; } catch (e) { return null; } }
 
@@ -1163,6 +1309,8 @@ button,.btn,select{min-height:44px}
     refNormalize, refValidCode, refWindowOpen, refDaysLeft, refCanEnter, refApplyClaim, refMatchesLeft, refFriendReady, refMarkQualified, refCredit, refRewarded, refMaxGems, refShare,
     shouldShowInterstitial, markInterstitialShown, bannerVisible, canWatchRewarded, grantRewarded, purchaseRemoveAds, restorePurchases,
     generateRivals, leaderboard, tierOf, save, load, eloAfter, ELO_K, cardFromPlayer, cardToBowler, hashStr, grantGemPack, ageGroupOf, setAgeGroup, adTreatment, data: D,
+    lbWeekNo, lbSeasonNo, lbKindOf, lbPeriod, lbPeriodInfo, lbLabel, lbPrev, lbResetIn, lbClaimable, lbRankOf, lbTier, lbTierDef, lbSeasonBall, lbReward, computePeriodRewards, lbSimBoard, lbStanding,
+    lbEnsure, lbRoll, lbTrack, lbMe, lbPendingLocal, lbClaim, lbWear, lbBadgeInfo, lbFrameColor,
     tutActive, tutStep, tutStart, tutGoto, tutAdvance, tutComplete, tutSkip, tutDecline, tutReplay, tutShouldOffer, tipsOn, tipDue, markTip, setTips };
 });
 </script><script>/* Pin Masters RPG audio: 100% original, procedurally synthesized Web Audio sound effects and music.
@@ -1748,8 +1896,30 @@ button,.btn,select{min-height:44px}
       const o = ensure(p), d = nowFn(); trackScore(p, 0, d);
       const card = C.cardFromPlayer(p, (extra && extra.nickname) || o.nickname);
       return Object.assign({ uid: S.uid, nickname: o.nickname, nickKey: o.nickKey, card, rating: card.rating, elo: o.elo, wins: o.wins, losses: o.losses, matchCount: o.matchCount,
-        best: Math.min(300, p.best || 0), weekKey: o.weekKey, weekBest: o.weekBest, seasonKey: o.seasonKey, seasonBest: o.seasonBest, v: D.APP_VERSION, updatedAt: F.serverTimestamp() }, extra || {});
+        best: Math.min(300, p.best || 0), weekKey: o.weekKey, weekBest: o.weekBest, seasonKey: o.seasonKey, seasonBest: o.seasonBest, flair: onlineFlair(p), v: D.APP_VERSION, updatedAt: F.serverTimestamp() }, extra || {});
     }
+    // v0.8 leaderboard rewards. Flair (badge / frame) only goes online if it came from an ONLINE claim doc (the rules check that doc).
+    function onlineFlair(p) { const L = p && p.lb, f = L && L.flair; if (!f) return null; const t = (L.trophies || []).find(x => x.id === f.src); return t && t.online ? { badge: f.badge, frame: f.frame || null, src: f.src } : null; }
+    const entryRef = (id, uid) => F.doc(db, 'boards', id, 'entries', uid || S.uid);
+    const ENTRY_STEP = 10;   // rules: "games" may grow by at most 10 per write
+    // Add this period's weekly + season snapshot rows to a write batch. Skipped within 2 minutes of a reset (device clocks drift; the
+    // rules only accept writes to the period that is open on the SERVER clock, and one bad doc would fail the whole batch).
+    // Own commit, after the users doc: rules re-check against it, and a big batch would hit the rules' per-request expression budget.
+    async function writeEntries(p) {
+      try { const b = F.writeBatch(db), ent = addEntries(b, p); if (!ent.length) return 0; await withTimeout(b.commit(), TIMEOUT_MS, 'board'); markSent(ent); return ent.length; }
+      catch (e) { console.warn('[online] board rows', e.message); return -1; }
+    }
+    function addEntries(b, p) {
+      if (!p || !p.lb) return []; const ms = nowFn().getTime(), out = [];
+      ['week', 'season'].forEach(k => {
+        const L = C.lbRoll(p, ms)[k], info = C.lbPeriodInfo(L.id);
+        if (!L.games || !L.best || ms - info.start < 120e3 || info.end - ms < 120e3) return;
+        const games = Math.min(L.games, (L.sent || 0) + ENTRY_STEP), value = Math.min(L.best, Math.min(300, p.best || 0)); if (value < 1) return;
+        b.set(entryRef(L.id), { uid: S.uid, nickname: ensure(p).nickname, value, games, flair: onlineFlair(p), updatedAt: F.serverTimestamp() }); out.push([L, games]);
+      });
+      return out;
+    }
+    const markSent = list => list.forEach(([L, g]) => { L.sent = g; L.online = true; });
 
     // Pick (or change) the public nickname. Reserves nicknames/{key} so names are unique (case-insensitive).
     S.claimNickname = (p, raw) => serial(() => _claimNickname(p, raw));
@@ -1776,7 +1946,7 @@ button,.btn,select{min-height:44px}
     const _sync = async function (p) {
       if (!S.hasNickname()) return false; await gap(WRITE_GAP_MS, lastWrite);
       const pr = S.profile; const d = userDoc(p, { createdAt: pr.createdAt, lastMatchAt: pr.lastMatchAt || null });
-      await withTimeout(F.setDoc(userRef(), d), TIMEOUT_MS, 'sync'); lastWrite = Date.now(); S.profile = (await F.getDoc(userRef())).data(); return true;
+      await withTimeout(F.setDoc(userRef(), d), TIMEOUT_MS, 'sync'); lastWrite = Date.now(); await writeEntries(p); S.profile = (await F.getDoc(userRef())).data(); return true;
     };
 
     // Matchmaking: real players nearest your Elo; the rest is filled with clearly-labelled AI practice rivals (unranked).
@@ -1789,7 +1959,7 @@ button,.btn,select{min-height:44px}
       [...up.docs, ...down.docs].forEach(s => { const u = s.data(); if (s.id === S.uid || seen[s.id] || !u.nickname || !u.card) return; seen[s.id] = 1; real.push(u); });
       real.sort((a, b) => Math.abs(a.elo - my) - Math.abs(b.elo - my));
       const out = real.slice(0, n).map(u => { const seed = matchSeed(S.uid, u.uid, o.matchCount + 1);
-        return { name: u.nickname, uid: u.uid, online: true, elo: u.elo, stats: u.card.stats, card: u.card, cos: u.card.cos, rating: u.rating, record: u.wins + '-' + u.losses, pattern: patternFor(u.rating, seed), seed }; });
+        return { name: u.nickname, uid: u.uid, online: true, elo: u.elo, stats: u.card.stats, card: u.card, cos: u.card.cos, rating: u.rating, record: u.wins + '-' + u.losses, flair: u.flair || null, pattern: patternFor(u.rating, seed), seed }; });
       if (out.length < n) C.generateRivals(p, (Date.now() / 60000) | 0, n - out.length).forEach(r => out.push(Object.assign(r, { filler: true, name: r.name })));
       return out;
     };
@@ -1814,24 +1984,70 @@ button,.btn,select{min-height:44px}
       // The profile written with the match carries the exact card that was played (the rules compare them); post-match level-ups go up with the next sync.
       b.set(userRef(), userDoc(p, { createdAt: pr.createdAt, lastMatchAt: F.serverTimestamp(), card: prep.myCard, rating: prep.myCard.rating }));
       try { await withTimeout(b.commit(), TIMEOUT_MS, 'match upload'); } catch (e) { Object.assign(o, saved); throw e; }
+      await writeEntries(p);
       lastWrite = lastMatch = Date.now(); S.profile = (await F.getDoc(userRef())).data(); p.pvp.wins = Math.max(p.pvp.wins, 0);
       return { before, after, delta: after - before, matchId: id };
     };
 
-    // Leaderboards: top 100 + your rank. kind: rating | pvp | week | season
-    const BOARDS = { rating: { field: 'rating', label: 'Rating' }, pvp: { field: 'elo', label: 'PvP Elo' }, week: { field: 'weekBest', key: 'weekKey', label: 'Best game' }, season: { field: 'seasonBest', key: 'seasonKey', label: 'Best game' } };
+    // Leaderboards: top 100 + your rank. kind: rating | pvp (all-time, from users) | week | season (v0.8 period snapshots in boards/{period}/entries).
+    const BOARDS = { rating: { field: 'rating', label: 'Rating' }, pvp: { field: 'elo', label: 'PvP Elo' } };
     S.leaderboard = async function (kind, p, top) {
-      const B = BOARDS[kind] || BOARDS.rating, users = F.collection(db, 'users'), d = nowFn(), kv = B.key === 'weekKey' ? weekKey(d) : B.key === 'seasonKey' ? seasonKey(d) : null;
-      const filt = kv ? [F.where(B.key, '==', kv)] : [];
-      const snap = await withTimeout(F.getDocs(F.query(users, ...filt, F.orderBy(B.field, 'desc'), F.limit(Math.min(100, top || 100)))), TIMEOUT_MS, 'leaderboard');
-      const rows = snap.docs.map((s, i) => { const u = s.data(); return { rank: i + 1, name: u.nickname, value: u[B.field], rating: u.rating, elo: u.elo, tier: C.tierOf(u.rating), you: s.id === S.uid }; });
+      if (kind === 'week' || kind === 'season') return S.periodBoard(C.lbPeriod(kind, nowFn().getTime()), top);
+      const B = BOARDS[kind] || BOARDS.rating, users = F.collection(db, 'users');
+      const snap = await withTimeout(F.getDocs(F.query(users, F.orderBy(B.field, 'desc'), F.limit(Math.min(100, top || 100)))), TIMEOUT_MS, 'leaderboard');
+      const rows = snap.docs.map((s, i) => { const u = s.data(); return { rank: i + 1, name: u.nickname, value: u[B.field], rating: u.rating, elo: u.elo, tier: C.tierOf(u.rating), flair: u.flair || null, you: s.id === S.uid }; });
       let me = rows.find(r => r.you) || null;
       if (!me && S.profile && S.profile.nickname) {
-        const pr = S.profile, val = kv && pr[B.key] !== kv ? null : pr[B.field];
-        if (val != null) { const c = await withTimeout(F.getCountFromServer(F.query(users, ...filt, F.where(B.field, '>', val))), TIMEOUT_MS, 'rank'); me = { rank: c.data().count + 1, name: pr.nickname, value: val, you: true, tier: C.tierOf(pr.rating) }; }
+        const pr = S.profile, val = pr[B.field];
+        if (val != null) { const c = await withTimeout(F.getCountFromServer(F.query(users, F.where(B.field, '>', val))), TIMEOUT_MS, 'rank'); me = { rank: c.data().count + 1, name: pr.nickname, value: val, you: true, tier: C.tierOf(pr.rating), flair: pr.flair || null }; }
       }
-      return { kind, label: B.label, period: kind === 'week' ? 'Week ' + kv.split('-W')[1] : kind === 'season' ? seasonName(kv) : 'All-time', rows, me };
+      return { kind, label: B.label, period: 'All-time', rows, me };
     };
+    // One period's board (best single game). Ties share the better rank, like the reward math.
+    S.periodBoard = async function (id, top) {
+      const col = F.collection(db, 'boards', id, 'entries');
+      const snap = await withTimeout(F.getDocs(F.query(col, F.orderBy('value', 'desc'), F.limit(Math.min(100, top || 100)))), TIMEOUT_MS, 'leaderboard');
+      const vals = snap.docs.map(d => d.data().value);
+      const rows = snap.docs.map(d => { const e = d.data(); return { rank: C.lbRankOf(e.value, vals), name: e.nickname, value: e.value, games: e.games, flair: e.flair || null, you: d.id === S.uid }; });
+      const st = S.uid ? await S.periodStanding(id) : null;
+      const me = st ? { rank: st.rank, value: st.value, games: st.games, name: S.profile && S.profile.nickname, you: true } : null;
+      if (me) rows.forEach(r => { if (r.you) r.rank = me.rank; });
+      return { kind: C.lbKindOf(id), id, label: 'Best game', period: C.lbLabel(id), rows, me, total: st ? st.total : null };
+    };
+    // Your rank in a period = 1 + number of strictly higher best games; total = everyone with an entry. null if you have no entry.
+    S.periodStanding = async function (id) {
+      const mine = await withTimeout(F.getDoc(entryRef(id)), TIMEOUT_MS, 'standing'); if (!mine.exists()) return null;
+      const e = mine.data(), col = F.collection(db, 'boards', id, 'entries');
+      const [above, all] = await withTimeout(Promise.all([F.getCountFromServer(F.query(col, F.where('value', '>', e.value))), F.getCountFromServer(col)]), TIMEOUT_MS, 'rank');
+      return { id, value: e.value, games: e.games, rank: above.data().count + 1, total: all.data().count };
+    };
+    // Reward mode: 'server' only when the project has config/rewards {mode:'server'} (the Blaze Cloud Function is deployed). Default: client (Spark).
+    let modeCache = null;
+    S.rewardsMode = async function () {
+      if (modeCache) return modeCache;
+      try { const c = await withTimeout(F.getDoc(F.doc(db, 'config', 'rewards')), TIMEOUT_MS, 'config'); modeCache = c.exists() && c.data().mode === 'server' ? 'server' : 'client'; }
+      catch (e) { modeCache = D.LB_REWARDS.mode === 'server' ? 'server' : 'client'; }
+      return modeCache;
+    };
+    const rewardRef = id => F.doc(db, 'rewards', S.uid + '_' + id);
+    const docToReward = (id, r) => Object.assign(C.lbReward(id, r.rank, r.total, r.games, r.value) || {}, { gems: r.gems, bonus: r.bonus, tier: r.tier });
+    // Claim a finished period once. Spark: the device works out its tier from the closed board and writes ONE immutable claim doc
+    // (rules re-check the arithmetic, the entry, the gem amount and the period window). Blaze: the function already wrote the doc; we flip claimed.
+    // Returns {ok, reward} | {ok:false, already|none|wait|noEntry}.
+    S.claimPeriod = (p, id) => serial(async () => {
+      const ms = nowFn().getTime(); if (!C.lbClaimable(id, ms)) return { ok: false, none: true, reason: 'That period can no longer be claimed' };
+      const ref = rewardRef(id), have = await withTimeout(F.getDoc(ref), TIMEOUT_MS, 'reward');
+      if (have.exists()) { const r = have.data(); if (r.claimed) return { ok: false, already: true, reward: docToReward(id, r) };
+        await withTimeout(F.updateDoc(ref, { claimed: true, claimedAt: F.serverTimestamp() }), TIMEOUT_MS, 'claim'); return { ok: true, reward: docToReward(id, r), source: 'server' }; }
+      if ((await S.rewardsMode()) === 'server') return { ok: false, wait: true, reason: 'Results are still being counted. Check back soon!' };
+      const st = await S.periodStanding(id); if (!st) return { ok: false, noEntry: true };
+      const rw = C.lbReward(id, st.rank, st.total, st.games, st.value); if (!rw) return { ok: false, none: true, standing: st };
+      const d = { uid: S.uid, period: id, kind: rw.kind, tier: rw.tier, rank: rw.rank, total: rw.total, value: st.value, games: st.games, gems: rw.gems, bonus: rw.bonus,
+        source: 'client', claimed: true, claimedAt: F.serverTimestamp(), createdAt: F.serverTimestamp() };
+      try { await withTimeout(F.setDoc(ref, d), TIMEOUT_MS, 'claim'); }
+      catch (e) { const again = await F.getDoc(ref).catch(() => null); if (again && again.exists()) return { ok: false, already: true, reward: docToReward(id, again.data()) }; throw e; }
+      return { ok: true, reward: rw, source: 'client' };
+    });
     // ---------- Friend codes & referral claims (v0.6) ----------
     // referralCodes/{CODE} = {uid}, referrers/{uid} = {code, createdAt}: one immutable code per account (created together).
     // referralClaims/{claimerUid} = {claimer, referrer, code, createdAt, qualified, qualifiedAt}: one per account, immutable except the qualified flip.
@@ -1898,6 +2114,10 @@ button,.btn,select{min-height:44px}
       if (rme.exists()) { b.delete(rme.ref); b.delete(refDoc('referralCodes', rme.data().code)); }
       const rcl = await withTimeout(F.getDoc(refDoc('referralClaims', S.uid)), TIMEOUT_MS, 'friend claim'); if (rcl.exists()) b.delete(rcl.ref);
       const rfr = await withTimeout(F.getDocs(F.query(F.collection(db, 'referralClaims'), F.where('referrer', '==', S.uid), F.limit(50))), TIMEOUT_MS, 'friends'); rfr.docs.forEach(d => b.delete(d.ref));
+      // v0.8 leaderboard snapshot rows (they hold your nickname + best game) in every period, and claim records that can't be re-claimed any more.
+      const ents = await withTimeout(F.getDocs(F.query(F.collectionGroup(db, 'entries'), F.where('uid', '==', S.uid), F.limit(200))), TIMEOUT_MS, 'board rows'); ents.docs.forEach(d => b.delete(d.ref));
+      const rws = await withTimeout(F.getDocs(F.query(F.collection(db, 'rewards'), F.where('uid', '==', S.uid), F.limit(200))), TIMEOUT_MS, 'rewards');
+      const tms = nowFn().getTime(); rws.docs.forEach(d => { if (!C.lbClaimable(d.data().period, tms)) b.delete(d.ref); });
       const uref = await withTimeout(F.getDoc(userRef()), TIMEOUT_MS, 'profile');
       if (uref.exists()) b.delete(userRef()); await withTimeout(b.commit(), TIMEOUT_MS, 'delete');
       if (ms.size === 100) { let more; do { more = await F.getDocs(F.query(F.collection(db, 'matches'), F.where('a', '==', S.uid), F.limit(100))); const b2 = F.writeBatch(db); more.docs.forEach(d => b2.delete(d.ref)); if (more.size) await b2.commit(); } while (more.size === 100); }
@@ -2138,7 +2358,8 @@ button,.btn,select{min-height:44px}
     return ON.connect().then(s => { const fresh = s && s !== online; online = s; if (fresh && P) { s.adopt(P); persist(); if (s.hasNickname()) s.sync(P).catch(e => console.warn('[online] sync', e.message)); refSync(true); } return s; });
   }
   function onlineAfterMatch(cfg, res) {
-    if (!ON || !P) return; ON.trackScore(P, res.player.total, now()); persist(); refQualify();
+    if (!P) return; C.lbTrack(P, res.player.total, now().getTime()); persist();   // v0.8 weekly + season boards (offline too)
+    if (!ON) return; ON.trackScore(P, res.player.total, now()); persist(); refQualify();
     if (!online || !online.hasNickname()) return;
     if (cfg.online) online.reportMatch(P, cfg.opp, cfg.prep, res, cfg.alley).then(r => { persist(); toast(`Online Elo ${r.after} (${r.delta >= 0 ? '+' : ''}${r.delta})`); if (current === 'pvp') RENDER.pvp(); })
       .catch(e => { console.warn('[online] report', e.message); toast('Could not save the online result. Check your connection.'); });
@@ -2184,6 +2405,7 @@ button,.btn,select{min-height:44px}
     <p class="muted" style="text-align:center">Prototype v${D.APP_VERSION} · saves to this device · <a href="#" id="resetLink">reset save</a></p>`;
     $('#hubAv').appendChild(avatar(playerLook(), 52));
     $('#hub').querySelectorAll('[data-go]').forEach(b => (b.onclick = () => show(b.dataset.go)));
+    setTimeout(lbCheckRewards, 50);
     $('#resetLink').onclick = e => { e.preventDefault(); modal('<h2>Reset save?</h2><p>This erases your bowler on this device. (Remove Ads can be restored with Restore Purchases.)</p>', [{ label: 'Erase', cls: 'orange', fn: () => { localStorage.removeItem(C.SAVE_KEY); localStorage.removeItem(C.LEGACY_SAVE_KEY); location.reload(); } }, { label: 'Cancel', cls: 'gray' }]); };
   };
 
@@ -2219,7 +2441,7 @@ button,.btn,select{min-height:44px}
       if (current !== 'pvp') return;
       let html = topbar() + `<h2>⚔️ Online PvP · Elo ${o.elo}</h2><p class="muted">Playing as <b>${esc(o.nickname)}</b> · record ${o.wins}-${o.losses}. Matches replay both bowlers' cards with a shared seed. Fair Play gear cap is on.</p>`;
       if (ops.some(r => r.filler)) html += `<div class="banner">🤖 Not enough real players near your Elo yet, so some rivals are AI practice bowlers (marked AI). AI matches are unranked.</div>`;
-      ops.forEach((r, i) => { const pat = D.PATTERNS[r.pattern]; html += `<div class="card row"><span data-look="${esc(r.name)}"></span><div class="grow"><b>${esc(r.name)}</b> ${r.online ? '<span class="tag ok">ONLINE</span>' : '<span class="tag">AI</span>'}<div class="muted">${r.online ? 'Elo ' + r.elo + ' · ' + r.record + ' · ' : 'Practice · unranked · '}rating ${C.rating(r.stats)} · 🛢️ ${esc(pat.name)}</div></div><button class="btn small blue" data-r="${i}">Challenge</button></div>`; });
+      ops.forEach((r, i) => { const pat = D.PATTERNS[r.pattern]; html += `<div class="card row"><span data-look="${esc(r.name)}"></span><div class="grow"><b>${nameCell(r.name, r.flair)}</b> ${r.online ? '<span class="tag ok">ONLINE</span>' : '<span class="tag">AI</span>'}<div class="muted">${r.online ? 'Elo ' + r.elo + ' · ' + r.record + ' · ' : 'Practice · unranked · '}rating ${C.rating(r.stats)} · 🛢️ ${esc(pat.name)}</div></div><button class="btn small blue" data-r="${i}">Challenge</button></div>`; });
       $('#pvp').innerHTML = html; fillAvatars($('#pvp'));
       $('#pvp').querySelectorAll('[data-r]').forEach(b => (b.onclick = () => { const r = ops[+b.dataset.r];
         if (r.online) { if (!s.canPlayRanked()) return toast('Next ranked match in ' + Math.ceil(s.waitMs() / 1000) + 's'); const prep = s.prepareMatch(P, r); prep.op.elo = r.elo;
@@ -2253,31 +2475,94 @@ button,.btn,select{min-height:44px}
     D.STATS.forEach(k => { const s = P.stats[k], need = C.xpToNext(s.level), info = D.STAT_INFO[k];
       html += `<div class="card"><div class="row"><b class="grow">${info.icon} ${info.label} · Lv ${s.level}</b><span class="tag ok">with gear ${Math.round(eff[k])}</span></div><div class="bar" style="margin:6px 0"><i style="width:${(100 * s.xp / need).toFixed(1)}%"></i></div><div class="muted">${s.xp}/${need} XP · ${info.desc}</div></div>`; });
     html += `<div class="card"><b>Rating ${C.rating(base)}</b> (${C.tierOf(C.rating(base))}) — sum of base stats, used for leaderboards and matchmaking.${P.xpBoost ? `<br><span class="tag">Double XP: ${P.xpBoost} matches</span>` : ''}</div>`;
+    const L = C.lbEnsure(P); html += `<h2>🏆 Trophy case</h2>`;
+    if (!L.trophies.length) html += `<div class="card muted">Finish a week or season on the 🏅 Leaderboard (5 games a week, 15 a season) to earn badges, frames and gems.</div>`;
+    else { html += `<div class="card" id="trophyCase"><div class="muted">Wear one badge at a time. It shows next to your name on leaderboards${onlineOn() ? ' and online PvP cards' : ''}.</div>`;
+      L.trophies.slice(0, 20).forEach(t => { const on = L.flair && L.flair.src === t.id, b = C.lbBadgeInfo(t.badge);
+        html += `<div class="row" style="margin-top:6px"><span style="font-size:24px">${b.icon}</span><div class="grow"><b style="${frameStyle(t.frame)}">${esc(b.name)}</b><div class="muted">${esc(C.lbLabel(t.id))} · #${t.rank} of ${t.total}${t.frame ? ' · ' + esc(D.LB_REWARDS.frames[t.frame].name) + ' frame' : ''}</div></div>${on ? '<span class="tag ok">Wearing</span>' : `<button class="btn small" data-wear="${t.id}">Wear</button>`}</div>`; });
+      html += (L.flair ? '<button class="btn small gray" data-wear="" style="margin-top:8px">Hide my badge</button>' : '') + '</div>'; }
     $('#stats').innerHTML = html;
+    $('#stats').querySelectorAll('[data-wear]').forEach(b => (b.onclick = () => { C.lbWear(P, b.dataset.wear || null); persist(); if (online && online.hasNickname()) online.sync(P).catch(() => {}); RENDER.stats(); toast(b.dataset.wear ? 'Badge on!' : 'Badge hidden'); }));
   };
+  // ---------- v0.8 leaderboard rewards (flair, rewards panel, claim modal) ----------
+  const frameStyle = f => { const c = C.lbFrameColor(f); return c ? `color:${c}` : ''; };
+  function flairTag(f) { const b = f && C.lbBadgeInfo(f.badge); if (!b) return ''; const c = C.lbFrameColor(f.frame); return ` <span class="flair" title="${esc(b.name)}" style="${c ? 'border-color:' + c : ''}">${b.icon}</span>`; }
+  const nameCell = (name, f, you) => `<span style="${f ? frameStyle(f.frame) : ''}">${esc(name)}</span>${you ? ' (You)' : ''}${flairTag(f)}`;
+  function fmtLeft(ms) { const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4); return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`; }
+  // Tier table + your projected tier for the running period. st = {rank,total,games} or null.
+  function rewardsPanel(kind, st) {
+    const R = D.LB_REWARDS, ms = now().getTime(), id = C.lbPeriod(kind, ms), min = R.minGames[kind], proj = st && st.rank && C.lbTier(kind, st.rank, st.total, st.games);
+    let h = `<div class="card" id="lbRewards"><div class="row"><b class="grow">🎁 ${kind === 'week' ? 'Weekly' : 'Season'} rewards · ${esc(C.lbLabel(id))}</b><span class="tag" id="lbReset">⏳ resets in ${fmtLeft(C.lbResetIn(kind, ms))}</span></div>`;
+    h += `<table class="lb rw"><tr><th>Tier</th><th>Place</th><th>Gems</th><th>Cosmetic</th></tr>`;
+    R.tiers.forEach(t => (h += `<tr class="${proj && proj.tier === t.id ? 'you' : ''}"><td>${t.icon} ${t.name}</td><td>${t.id === 'participation' ? min + '+ games' : 'Top ' + t.top + '%'}</td><td>💎 ${t[kind]}</td><td>${kind === 'season' && t.frame ? `<span style="${frameStyle(t.frame)}">${esc(R.frames[t.frame].name)}</span> frame + season ball` : 'Badge'}</td></tr>`));
+    h += `</table><div class="muted" style="margin-top:4px">Top 3 bonus: +${R.top3[kind].join(' / +')} 💎 (boards of ${R.top3.minPlayers}+). Everyone needs ${min} games ${kind === 'week' ? 'this week' : 'this season'}. Ranked by your best single game. Rewards are cosmetic: they never add stats.</div>`;
+    if (st) h += `<div class="banner" id="lbProj" style="margin-top:6px">${proj ? `${proj.icon} On track for <b>${esc(proj.name)}</b> (+${proj.gems} 💎)` : st.games < min ? `🎳 Play <b>${min - st.games}</b> more game${min - st.games === 1 ? '' : 's'} to qualify` : 'Keep bowling to climb into a reward tier'} ${st.rank ? ` · #${st.rank} of ${st.total}` : ''} · ${st.games}/${min} games</div>`;
+    return h + '</div>';
+  }
+  // Rewards waiting for finished periods. Offline periods use the simulated board; online ones are counted on the server board.
+  let lbBusy = false;
+  async function lbCheckRewards() {
+    if (!P || lbBusy || $('#modal').classList.contains('show') || C.tutActive(P) || (current !== 'hub' && current !== 'leaderboard')) return;
+    const ms = now().getTime(), L = C.lbRoll(P, ms), local = C.lbPendingLocal(P, ms).filter(r => !(L.pending.find(x => x.id === r.id) || {}).online);
+    let item = local[0] ? { reward: local[0], online: false } : null;
+    if (!item) { const op = L.pending.find(x => x.online); if (op && onlineOn()) { lbBusy = true;
+      try { const s = await connectOnline(); const st = s && await s.periodStanding(op.id); const rw = st && C.lbReward(op.id, st.rank, st.total, st.games, st.value);
+        if (s && !st) L.pending = L.pending.filter(x => x.id !== op.id); else if (rw) item = { reward: rw, online: true, s }; else if (st) L.pending = L.pending.filter(x => x.id !== op.id); persist(); }
+      catch (e) { console.warn('[online] rewards', e.message); } finally { lbBusy = false; } } }
+    if (!item || $('#modal').classList.contains('show') || (current !== 'hub' && current !== 'leaderboard')) return;
+    claimModal(item);
+  }
+  function claimModal(item) {
+    const r = item.reward, b = C.lbBadgeInfo(r.badge), ball = r.ball && C.cosById(r.ball);
+    modal(`<div id="lbClaim"><h2>🏁 ${esc(r.label)} results</h2><p style="font-size:42px;text-align:center;margin:4px 0">${r.icon}</p><p style="text-align:center"><b>${esc(r.name)}</b> · #${r.rank} of ${r.total}<br><span class="muted">best game ${r.value} · ${r.games} games</span></p>
+      <div class="card"><div>💎 <b>+${r.base}</b> gems${r.bonus ? ` · 🥇 top-3 bonus <b>+${r.bonus}</b>` : ''}</div><div>${b.icon} <b>${esc(b.name)}</b> badge</div>${r.frame ? `<div>🖼️ <b style="${frameStyle(r.frame)}">${esc(D.LB_REWARDS.frames[r.frame].name)}</b> frame + name color</div>` : ''}${ball ? `<div class="row">${swatch([ball.color, ball.color2])}<span><b>${esc(ball.name)}</b> ball look</span></div>` : ''}</div>
+      <p class="muted">${item.online ? 'From the online board.' : 'From your on-device board.'} Rewards are cosmetic and never change stats.</p></div>`,
+      [{ label: 'Claim!', cls: 'green', id: 'lbClaimBtn', keep: true, fn: async () => {
+        const btn = $('#lbClaimBtn'); btn.disabled = true; let rw = r;
+        if (item.online) { try { const x = await item.s.claimPeriod(P, r.id); if (!x.ok && !x.already) { btn.disabled = false; toast(x.reason || 'Could not claim yet. Try again later.'); if (x.none) { C.lbEnsure(P).pending = C.lbEnsure(P).pending.filter(p => p.id !== r.id); persist(); closeModal(); } return; } rw = x.reward && x.reward.id ? x.reward : r; }
+          catch (e) { btn.disabled = false; return toast('Could not reach the server. Try again.'); } }
+        const c = C.lbClaim(P, rw, { online: item.online, now: now().getTime() }); persist(); closeModal(); sfx('levelup');
+        toast(c.ok ? `🎉 ${c.msg}${c.ball ? ' + season ball!' : ''}` : 'Already claimed'); if (c.ok && online && online.hasNickname()) online.sync(P).catch(() => {});
+        if (RENDER[current] && current !== 'match') RENDER[current](); } }]);
+  }
   let lbTab = 'rating';
-  RENDER.leaderboard = () => { if (onlineOn()) return renderOnlineBoard(); renderLocalBoard(); };
+  const LB_TABS = [['rating', '⭐ Rating'], ['pvp', '⚔️ PvP'], ['week', '📅 Week'], ['season', '🏆 Season']];
+  const lbTabsHtml = tabs => `<div class="tabs">${tabs.map(([k, l]) => `<button class="btn ${k === lbTab ? 'sel' : ''}" data-lb="${k}">${l}</button>`).join('')}</div>`;
+  RENDER.leaderboard = () => { if (onlineOn()) renderOnlineBoard(); else renderLocalBoard(); setTimeout(lbCheckRewards, 50); };
   function renderOnlineBoard() {
-    const tabs = [['rating', '⭐ Rating'], ['pvp', '⚔️ PvP'], ['week', '📅 Week'], ['season', '🏆 Season']];
-    const head = topbar() + `<h2>🏅 Online Leaderboards</h2><div class="tabs">${tabs.map(([k, l]) => `<button class="btn ${k === lbTab ? 'sel' : ''}" data-lb="${k}">${l}</button>`).join('')}</div>`;
+    const head = topbar() + `<h2>🏅 Online Leaderboards</h2>` + lbTabsHtml(LB_TABS);
     const bindTabs = () => $('#leaderboard').querySelectorAll('[data-lb]').forEach(b => (b.onclick = () => { lbTab = b.dataset.lb; RENDER.leaderboard(); }));
     $('#leaderboard').innerHTML = head + '<div class="card muted">🌐 Loading the top 100...</div>'; bindTabs();
     connectOnline().then(async s => {
       if (current !== 'leaderboard') return; if (!s) return renderLocalBoard('📴 Could not reach the online leaderboard (offline?). Showing your local board.');
       let lb; try { lb = await s.leaderboard(lbTab, P); } catch (e) { return renderLocalBoard('📴 The online leaderboard is unavailable right now. Showing your local board.'); }
-      if (current !== 'leaderboard') return;
-      let html = head + `<p class="muted">${esc(lb.period)} · top ${lb.rows.length}${s.hasNickname() ? '' : ' · <a href="#" id="lbName">pick an online name</a> to appear here'}</p><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th><th>Tier</th><th>${esc(lb.label)}</th></tr>`;
-      lb.rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${esc(r.name)}${r.you ? ' (You)' : ''}</td><td>${r.tier}</td><td>${r.value}</td></tr>`));
+      if (current !== 'leaderboard') return; const per = lbTab === 'week' || lbTab === 'season';
+      let html = head + (per ? rewardsPanel(lbTab, lb.me ? { rank: lb.me.rank, total: lb.total, games: lb.me.games } : null) : '') + `<p class="muted">${esc(lb.period)} · top ${lb.rows.length}${per && lb.total ? ' of ' + lb.total : ''}${s.hasNickname() ? '' : ' · <a href="#" id="lbName">pick an online name</a> to appear here'}</p><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th>${per ? '<th>Games</th>' : '<th>Tier</th>'}<th>${esc(lb.label)}</th></tr>`;
+      lb.rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${nameCell(r.name, r.flair, r.you)}</td><td>${per ? r.games : r.tier}</td><td>${r.value}</td></tr>`));
       if (!lb.rows.length) html += '<tr><td colspan="4" class="muted">No scores yet. Be the first!</td></tr>';
       html += '</table></div>' + (lb.me && !lb.rows.some(r => r.you) ? `<div class="card"><b>Your rank: #${lb.me.rank}</b> · ${esc(lb.label)} ${lb.me.value}</div>` : '');
       $('#leaderboard').innerHTML = html; bindTabs(); const ln = $('#lbName'); if (ln) ln.onclick = e => { e.preventDefault(); nameBuilder(() => RENDER.leaderboard()); };
     });
   }
+  // Offline: rating board (as before) + simulated weekly / season boards with real (on-device) rewards.
   function renderLocalBoard(note) {
-    const rows = C.leaderboard(P);
-    let html = topbar() + `<h2>🏅 Leaderboard · Season 1</h2>${note ? `<div class="banner">${note}</div>` : ''}<div class="banner">Local leaderboard (on-device). Online seasonal & bracketed boards need a backend.</div><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th><th>Tier</th><th>Rating</th><th>Best</th></tr>`;
-    rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${esc(r.name)}</td><td>${r.tier}</td><td>${r.rating}</td><td>${r.best}</td></tr>`));
-    $('#leaderboard').innerHTML = html + '</table></div>';
+    if (lbTab === 'pvp') lbTab = 'rating';
+    let html = topbar() + `<h2>🏅 Leaderboard</h2>${note ? `<div class="banner">${note}</div>` : ''}` + lbTabsHtml([['rating', '⭐ Rating'], ['week', '📅 Week'], ['season', '🏆 Season']]);
+    if (lbTab === 'rating') {
+      const rows = C.leaderboard(P); const f = C.lbEnsure(P).flair;
+      html += `<div class="banner">Local leaderboard (on-device). Turn on online play for real players.</div><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th><th>Tier</th><th>Rating</th><th>Best</th></tr>`;
+      rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${r.you ? nameCell(r.name, f) : esc(r.name)}</td><td>${r.tier}</td><td>${r.rating}</td><td>${r.best}</td></tr>`));
+      html += '</table></div>';
+    } else {
+      const ms = now().getTime(), id = C.lbPeriod(lbTab, ms), me = C.lbMe(P, lbTab), st = C.lbStanding(id, C.lbSimBoard(id, ms), me), f = C.lbEnsure(P).flair;
+      html += rewardsPanel(lbTab, me.games ? { rank: st.you.rank, total: st.total, games: me.games } : { rank: null, total: st.total, games: 0 });
+      html += `<p class="muted">${esc(C.lbLabel(id))} · best single game · ${st.total} bowlers · simulated on this device</p><div class="card"><table class="lb" id="lbTable"><tr><th>#</th><th>Bowler</th><th>Games</th><th>Best</th></tr>`;
+      const top = st.rows.slice(0, 25); if (st.you && !top.includes(st.you)) top.push(st.you);
+      top.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${r.you ? nameCell(r.name, f) : esc(r.name)}</td><td>${r.games}</td><td>${r.value}</td></tr>`));
+      html += '</table></div>';
+    }
+    $('#leaderboard').innerHTML = html;
+    $('#leaderboard').querySelectorAll('[data-lb]').forEach(b => (b.onclick = () => { lbTab = b.dataset.lb; RENDER.leaderboard(); }));
   }
 
   // ---------- Settings (sound) ----------
@@ -2526,7 +2811,7 @@ button,.btn,select{min-height:44px}
     let html = topbar() + (storeLive() ? '' : `<div class="banner">DEMO — NO REAL PURCHASES. Prices show how the real store would look. Nothing is charged.</div>`) + `<h2>👕 Style Shop</h2><div class="card muted">Cosmetics have <b>no stat effects</b>. Buy with coins or gems. No loot boxes: you always know exactly what you get.</div><div class="tabs">${[['outfit', '👕 Outfits'], ['ball', '🎳 Ball designs'], ['celebration', '🎉 Celebrations']].map(([k, l]) => `<button class="btn ${k === styleTab ? 'sel' : ''}" data-st="${k}">${l}</button>`).join('')}</div>`;
     D.COSMETICS.filter(c => c.type === styleTab).forEach(c => { const own = P.cosmetics.includes(c.id), eq = P.cos[c.type] === c.id;
       const icon = c.type === 'celebration' ? `<span style="font-size:26px">${CEL_ICON[c.fx]}</span>` : c.color ? swatch(c.color === 'rainbow' ? ['#a855f7', '#facc15'] : [c.color, c.color2 || '#fff']) : swatch(['#94a3b8', '#fff']);
-      html += `<div class="card row">${icon}<div class="grow"><b>${esc(c.name)}</b><div class="muted">Cosmetic only</div></div>${own ? (eq ? '<span class="tag ok">Equipped</span>' : `<button class="btn small green" data-ceq="${c.id}">Equip</button>`) : (c.referral ? '<button class="btn small gray" data-go="friends">🤝 Friend reward</button>' : `<button class="btn small" data-cbuy="${c.id}">${c.gems ? '💎 ' + c.gems : '🪙 ' + c.coins}</button>`)}</div>`; });
+      html += `<div class="card row">${icon}<div class="grow"><b>${esc(c.name)}</b><div class="muted">${c.season ? 'Earn it: Pro or better on a Season board' : 'Cosmetic only'}</div></div>${own ? (eq ? '<span class="tag ok">Equipped</span>' : `<button class="btn small green" data-ceq="${c.id}">Equip</button>`) : (c.season ? '<button class="btn small gray" data-go="leaderboard">🏆 Season reward</button>' : c.referral ? '<button class="btn small gray" data-go="friends">🤝 Friend reward</button>' : `<button class="btn small" data-cbuy="${c.id}">${c.gems ? '💎 ' + c.gems : '🪙 ' + c.coins}</button>`)}</div>`; });
     if (styleTab === 'ball' && P.cos.ball) html += `<button class="btn small gray" data-ceq="">Use brand colors</button>`;
     html += `<h2>🚫 Remove Ads</h2><div class="card row" id="removeAdsCard"><span style="font-size:28px">🚫</span><div class="grow"><b>Remove Ads — $${D.REMOVE_ADS.usd.toFixed(2)}</b><div class="muted">One-time (non-consumable). Removes banners and between-match ads. Optional reward ads stay available.</div></div>${P.entitlements.removeAds ? '<span class="tag ok">Owned</span>' : `<button class="btn small blue" id="buyRemoveAds">${storeLive() ? MON.price(D.REMOVE_ADS.sku, D.REMOVE_ADS.usd) : '$' + D.REMOVE_ADS.usd.toFixed(2) + ' (demo)'}</button>`}</div><button class="btn small gray" id="restoreBtn">Restore Purchases</button>`;
     html += `<h2>💎 Gems</h2>`;
