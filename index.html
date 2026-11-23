@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.8.1"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.8.2"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -118,6 +118,24 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
 
 /* v0.8.1 story chapter gate */
 .gatebox{background:#fff7ed;border:2px dashed #fdba74;border-radius:12px;padding:10px;margin:8px 0}.gatebar{height:14px}.gatebar>i{background:linear-gradient(90deg,#f59e0b,#facc15)}
+
+/* v0.8.2 character creation / appearance */
+.genders{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
+.btn.gender{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 8px}
+.btn.gender.sel{box-shadow:0 4px 0 #4c1d95,0 0 0 3px #4c1d95}
+.btn.gender .gav{display:flex;align-items:center}
+.btn.gender .gav canvas{display:block;border-radius:50%;background:#ede9fe}
+.lookprev{display:flex;justify-content:center;margin:8px 0}
+.lookprev canvas{border-radius:50%;background:#ede9fe;box-shadow:0 0 0 4px #ddd6fe}
+.swatches{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 8px}
+.swatches .chip{width:44px;height:44px;min-height:44px;min-width:44px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 2px #ddd;padding:0;cursor:pointer;background:#ccc}
+.swatches .chip.sel{box-shadow:0 0 0 3px #4c1d95}
+.hatrow{display:flex;flex-wrap:wrap;gap:6px}
+.hatrow .btn.sel{box-shadow:0 4px 0 #15803d,0 0 0 2px #166534}
+.matchheads{margin:0 0 6px;gap:8px}
+.matchheads canvas{display:block;border-radius:50%;background:#ede9fe;flex:none}
+.lbav{display:inline-flex;vertical-align:middle;margin-right:4px}
+.lbav canvas{display:block;border-radius:50%;background:#ede9fe;width:28px!important;height:28px!important}
 </style></head>
 <body><div id="app">
 <section class="screen" id="create"></section><section class="screen" id="hub"></section><section class="screen" id="story"></section>
@@ -470,7 +488,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   // Rival: Brock "Showtime" Sterling (he/him). Original character. Recurs across the story.
   const RIVAL = {
     id: 'brock', name: 'Brock Sterling', nick: 'Showtime', pronouns: 'he/him', style: 'Flashy local hotshot with a huge hook',
-    look: { shirt: '#ffd60a', hair: '#ffb703', skin: '#f1c27d', hat: 'none', sparkle: true },
+    look: { gender: 'male', shirt: '#ffd60a', hair: '#ffb703', skin: '#f1c27d', hat: 'none', sparkle: true },
     bio: 'Wears a sparkly gold jacket, celebrates every strike like he won the lottery, and never stops talking.',
     celebration: 'sparkle', signature: 'showtime_hook',
     forms: {
@@ -538,8 +556,20 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   const RIVAL_FIRST = ['Ace', 'Bowlie', 'Pinny', 'Rolla', 'Sparky', 'Turbo', 'Lucky', 'Ziggy', 'Mango', 'Pixel', 'Nova', 'Echo', 'Comet', 'Waffles', 'Jinx'];
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
+  // v0.8.2 character appearance (cosmetic only: no stat changes, no paid items)
+  const APPEARANCE = {
+    genders: ['male', 'female'],
+    shirts: ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#fb5607', '#264653', '#ec4899'],
+    skins: ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#8d5524'],
+    hairs: ['#111111', '#222222', '#6d4c41', '#d4a373', '#a0522d', '#ffb703', '#f4f1de'],
+    hats: ['none', 'cap', 'headband', 'visor', 'bandana'],
+    hatChoices: ['none', 'cap', 'headband'],
+    // Story / named NPCs who should render with the female hair silhouette.
+    femaleNames: ['Lulu', 'Priya', 'Marisol', 'Sasha', 'Queen']
+  };
+
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.8.1';
+  const APP_VERSION = '0.8.2';
   const TUTORIAL = {
     reward: 100,
     steps: [
@@ -573,7 +603,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     }
   };
 
-  return { APP_VERSION, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, LB_REWARDS, REFERRAL, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, PREMIUM_GEAR, PREMIUM_TIERS, PREMIUM_CAP, PREMIUM_COIN_RATE, GEM_INCOME, GEM_BOOSTS, RIVAL_FIRST, RIVAL_LAST };
+  return { APP_VERSION, APPEARANCE, TUTORIAL, STATS, STAT_INFO, VOLUME, PATTERNS, COSMETICS, LB_REWARDS, REFERRAL, RIVAL, MENTOR, SKILLS, DRILLS, CHALLENGES, SIM_CLUBS, AD_CONFIG, REMOVE_ADS, COVERS, BRANDS, BALLS, GEAR, SHOPS, ALLEYS, PROS, STORY, GEM_PACKS, PREMIUM_ITEMS, PREMIUM_GEAR, PREMIUM_TIERS, PREMIUM_CAP, PREMIUM_COIN_RATE, GEM_INCOME, GEM_BOOSTS, RIVAL_FIRST, RIVAL_LAST };
 });
 </script><script>/* Pin Masters RPG core logic: pure functions (no DOM) so it can be unit-tested in Node
  * and later run on a server for authoritative PvP. */
@@ -846,7 +876,44 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     // v0.8.1 chapter gates. Saves from before v0.8.1 keep every chapter they could already reach (never lock anyone out mid-story).
     if (p.story.open == null) p.story.open = p.story.chapter;
     if (!p.story.loss) p.story.loss = { key: null, n: 0 };
+    // v0.8.2 appearance. Older saves keep the current (male) look and get a one-time prompt; changing look is always free and never changes stats.
+    p.look = normalizeLook(p.look, p.name);
+    if (p.lookChosen == null) p.lookChosen = false;
     return p;
+  }
+
+  // ---------- Appearance (v0.8.2, cosmetic only) ----------
+  const HEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+  function validColor(s, extra) { return typeof s === 'string' && (HEX.test(s) || (extra && extra.indexOf(s) >= 0)); }
+  function pickFrom(list, i, fallback) { return (list && list.length && list[i % list.length]) || fallback; }
+  function lookFromName(name) {
+    const A = D.APPEARANCE, n = String(name || 'Rookie');
+    let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0;
+    const first = n.split(/\s+/)[0];
+    const gender = (A.femaleNames || []).indexOf(first) >= 0 ? 'female' : 'male';
+    return {
+      gender, shirt: pickFrom(A.shirts, h, '#118ab2'), skin: pickFrom(A.skins, h >> 3, '#f1c27d'),
+      hair: pickFrom(A.hairs, h >> 6, '#222222'), hat: pickFrom(A.hats, h >> 9, 'none')
+    };
+  }
+  function normalizeLook(look, name) {
+    const base = lookFromName(name), src = look && typeof look === 'object' ? look : {};
+    const hatOk = (D.APPEARANCE.hats || ['none', 'cap', 'headband', 'visor', 'bandana']);
+    const out = {
+      gender: src.gender === 'female' ? 'female' : 'male',
+      shirt: validColor(src.shirt, ['rainbow']) ? src.shirt : base.shirt,
+      hair: validColor(src.hair) ? src.hair : base.hair,
+      skin: validColor(src.skin) ? src.skin : base.skin,
+      hat: hatOk.indexOf(src.hat) >= 0 ? src.hat : (src.hat == null && hatOk.indexOf(base.hat) >= 0 ? base.hat : 'none')
+    };
+    if (src.sparkle) out.sparkle = true;
+    return out;
+  }
+  function setLook(p, look) { migrate(p); p.look = normalizeLook(look, p.name); p.lookChosen = true; return p.look; }
+  function pronouns(p) {
+    const g = p && p.look && p.look.gender;
+    if (g === 'female') return { subject: 'she', object: 'her', poss: 'her', possNoun: 'hers', reflexive: 'herself' };
+    return { subject: 'he', object: 'him', poss: 'his', possNoun: 'his', reflexive: 'himself' };
   }
   // ---------- Tutorial (status: new -> active -> done | skipped; legacy = old save; declined = said no to the offer) ----------
   const tutSteps = () => D.TUTORIAL.steps;
@@ -1205,8 +1272,10 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   const r2 = x => Math.round(x * 100) / 100;
   function cardFromPlayer(p, name) {
     migrate(p); const b = playerBowler(p, { fairPlay: true }); const st = {}; D.STATS.forEach(k => (st[k] = r2(b.stats[k])));
+    const lk = normalizeLook(p.look, p.name);
     return { name: String(name || p.name).slice(0, 16), stats: st, ballId: b.ball.id, cond: r2(b.condition), spareBonus: r2(b.spareBonus || 0), altHook: b.altHook == null ? null : r2(b.altHook),
-      skills: (b.skills || []).slice(0, 3).map(s => ({ id: s.id, level: s.level })), cos: { outfit: p.cos.outfit || null, ball: p.cos.ball || null, celebration: p.cos.celebration || null }, rating: rating(baseStats(p)) };
+      skills: (b.skills || []).slice(0, 3).map(s => ({ id: s.id, level: s.level })), cos: { outfit: p.cos.outfit || null, ball: p.cos.ball || null, celebration: p.cos.celebration || null },
+      look: { gender: lk.gender, shirt: lk.shirt, hair: lk.hair, skin: lk.skin, hat: lk.hat }, rating: rating(baseStats(p)) };
   }
   function cardToBowler(card) {
     const ball = ballById(card.ballId) || ballById('house_ball'); const st = {}; D.STATS.forEach(k => (st[k] = Math.max(0, +card.stats[k] || 0)));
@@ -1220,7 +1289,8 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
       const spread = 0.8 + rng() * 0.4; const st = {};
       D.STATS.forEach(k => (st[k] = Math.max(3, Math.round(base[k] * spread * (0.85 + rng() * 0.3) + 4))));
       const name = D.RIVAL_FIRST[Math.floor(rng() * D.RIVAL_FIRST.length)] + ' ' + D.RIVAL_LAST[Math.floor(rng() * D.RIVAL_LAST.length)];
-      out.push({ name, stats: st, ballHook: 0.5 + rng() * 0.7, spareBonus: 0.02, elo: Math.round(p.pvp.rating + (rng() - 0.5) * 200), simulated: true, pattern: pool[Math.floor(rng() * pool.length)] });
+      const look = normalizeLook(Object.assign(lookFromName(name), { gender: rng() < 0.5 ? 'female' : 'male' }), name);
+      out.push({ name, stats: st, ballHook: 0.5 + rng() * 0.7, spareBonus: 0.02, elo: Math.round(p.pvp.rating + (rng() - 0.5) * 200), simulated: true, pattern: pool[Math.floor(rng() * pool.length)], look });
     }
     return out;
   }
@@ -1353,7 +1423,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
 
   return { bowlerRating, chapterGate, chapterOpen, gateInfo, gateMessage, consolationTip, SAVE_KEY, LEGACY_SAVE_KEY, ENTITLEMENT_KEY, RACK, makeRng, xpToNext, addStatXp, rating, scoreGame, frameMarks, isGameComplete, nextRollInfo, isSplit, PIN_POS,
     patternById, alleyPattern, forgiveness, breakdownShift, idealHook, recommendBall, laneFit, effectiveDifficulty,
-    ballById, gearById, ballProfile, gearBonus, effectiveStats, skillChance, simulateRoll, simulateGame, newPlayer, migrate, baseStats,
+    ballById, gearById, ballProfile, gearBonus, effectiveStats, skillChance, simulateRoll, simulateGame, newPlayer, migrate, baseStats, lookFromName, normalizeLook, setLook, pronouns,
     chaptersCleared, isUnlocked, buy, equip, premById, bonusSum, premiumBaseline, premiumCapOk, premiumEdge, buyPremiumGear, grantStoryPremium, boostsLeft, buyPremiumItem, streakGems, dailyGemsFree, daysToEarnGems, bagCarry, altBallHook, playerBowler, opponentBowler, playMatch, matchRewards, countEvents, applyMatch, drillById, train, cleanBall,
     skillSlots, skillUpgradeCost, unlockSkills, upgradeSkill, toggleSkill, dateStr, dailyCheck, recordDaily, streakBonus, claimStreak, claimChallenge,
     weekKey, JOINABLE, createClub, joinClub, leaveClub, clubTable, clubCheck, leagueNight, leagueAvailable, nextLeagueReset, cosById, buyCosmetic, equipCosmetic,
@@ -2352,26 +2422,86 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   function swatch(colors) { return `<div class="swatch" style="background:radial-gradient(circle at 35% 30%,${colors[1]} 0 18%,${colors[0]} 45%)"></div>`; }
   const hal = () => D.PROS.find(p => p.id === 'quimby');
   function dialog(look, text, cls) { return `<div style="position:relative"><div class="dialog ${cls || ''}" data-avlook='${esc(JSON.stringify(look))}'><span class="av"></span>${text}</div></div>`; }
-  function fillAvatars(root) { (root || document).querySelectorAll('[data-avlook]').forEach(e => { const av = e.querySelector('.av'); if (av && !av.firstChild) av.appendChild(avatar(JSON.parse(e.dataset.avlook), 50)); }); (root || document).querySelectorAll('[data-look]').forEach(e => { if (!e.firstChild) { const pro = e.dataset.pro && D.PROS.find(p => p.id === e.dataset.pro); e.appendChild(avatar(e.dataset.rival ? D.RIVAL.look : pro ? pro.look : lookFor(e.dataset.look), 40)); } }); }
+  function fillAvatars(root) {
+    (root || document).querySelectorAll('[data-avlook]').forEach(e => { const av = e.querySelector('.av'); if (av && !av.firstChild) av.appendChild(avatar(JSON.parse(e.dataset.avlook), 50)); });
+    (root || document).querySelectorAll('[data-look]').forEach(e => { if (!e.firstChild) { const pro = e.dataset.pro && D.PROS.find(p => p.id === e.dataset.pro); e.appendChild(avatar(e.dataset.rival ? D.RIVAL.look : pro ? pro.look : lookFor(e.dataset.look), 40)); } });
+    (root || document).querySelectorAll('[data-lk]').forEach(e => { if (!e.firstChild) e.appendChild(avatar(JSON.parse(e.dataset.lk), 40)); });
+  }
 
   function avatar(look, size) {
-    size = size || 52; const c = document.createElement('canvas'); c.width = c.height = size * 2; c.style.width = c.style.height = size + 'px';
-    const g = c.getContext('2d'); g.scale(2, 2); const s = size;
+    look = C.normalizeLook(look, ''); size = size || 52; const c = document.createElement('canvas'); c.width = c.height = size * 2; c.style.width = c.style.height = size + 'px';
+    const g = c.getContext('2d'); g.scale(2, 2); const s = size, fem = look.gender === 'female';
     if (look.shirt === 'rainbow') { const gr = g.createLinearGradient(0, s * 0.7, s, s); ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'].forEach((c2, i) => gr.addColorStop(i / 4, c2)); g.fillStyle = gr; } else g.fillStyle = look.shirt;
     g.beginPath(); g.ellipse(s / 2, s * 0.98, s * 0.38, s * 0.3, 0, Math.PI, 0); g.fill();
     if (look.sparkle) { g.fillStyle = '#fff'; [[0.3, 0.8], [0.55, 0.88], [0.7, 0.78], [0.42, 0.93]].forEach(([x, y]) => { g.beginPath(); g.arc(s * x, s * y, s * 0.025, 0, 7); g.fill(); }); g.strokeStyle = '#b45309'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(s * 0.5, s * 0.7); g.lineTo(s * 0.5, s); g.stroke(); }
+    // Longer hair is drawn behind the head so the female silhouette reads clearly at small sizes.
+    if (fem) { g.fillStyle = look.hair; g.beginPath(); g.ellipse(s / 2, s * 0.58, s * 0.33, s * 0.36, 0, 0, Math.PI * 2); g.fill(); g.beginPath(); g.ellipse(s * 0.25, s * 0.6, s * 0.1, s * 0.22, 0.2, 0, Math.PI * 2); g.ellipse(s * 0.75, s * 0.6, s * 0.1, s * 0.22, -0.2, 0, Math.PI * 2); g.fill(); }
     g.fillStyle = look.skin; g.beginPath(); g.arc(s / 2, s * 0.45, s * 0.24, 0, Math.PI * 2); g.fill();
     g.fillStyle = look.hair; g.beginPath(); g.arc(s / 2, s * 0.4, s * 0.25, Math.PI * 1.05, Math.PI * 1.95); g.fill();
+    if (fem) { g.beginPath(); g.ellipse(s / 2, s * 0.3, s * 0.23, s * 0.11, 0, Math.PI, Math.PI * 2); g.fill(); }
     if (look.sparkle) { g.beginPath(); g.moveTo(s * 0.35, s * 0.2); g.lineTo(s * 0.5, s * 0.05); g.lineTo(s * 0.62, s * 0.2); g.fill(); }
-    if (look.hat === 'cap') { g.fillStyle = look.shirt; g.fillRect(s * 0.26, s * 0.2, s * 0.48, s * 0.1); g.fillRect(s * 0.5, s * 0.26, s * 0.3, s * 0.05); }
+    if (look.hat === 'cap') { g.fillStyle = look.shirt === 'rainbow' ? '#3b82f6' : look.shirt; g.fillRect(s * 0.26, s * 0.2, s * 0.48, s * 0.1); g.fillRect(s * 0.5, s * 0.26, s * 0.3, s * 0.05); }
     if (look.hat === 'headband' || look.hat === 'bandana') { g.fillStyle = look.hat === 'bandana' ? '#e76f51' : '#fff'; g.fillRect(s * 0.27, s * 0.3, s * 0.46, s * 0.06); }
     if (look.hat === 'visor') { g.fillStyle = '#fff'; g.fillRect(s * 0.3, s * 0.25, s * 0.5, s * 0.05); }
     g.fillStyle = '#222'; g.beginPath(); g.arc(s * 0.42, s * 0.46, s * 0.025, 0, 7); g.arc(s * 0.58, s * 0.46, s * 0.025, 0, 7); g.fill();
+    if (fem) { g.strokeStyle = '#222'; g.lineWidth = 1.1; g.beginPath(); g.moveTo(s * 0.36, s * 0.44); g.lineTo(s * 0.32, s * 0.42); g.moveTo(s * 0.64, s * 0.44); g.lineTo(s * 0.68, s * 0.42); g.stroke(); }
     g.strokeStyle = '#7a3e2e'; g.lineWidth = 1.5; g.beginPath(); g.arc(s / 2, s * 0.52, s * 0.08, 0.2, Math.PI - 0.2); g.stroke();
     return c;
   }
-  function lookFor(name) { let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) >>> 0; const shirts = ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#fb5607']; const skins = ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#8d5524']; const hairs = ['#222', '#6d4c41', '#d4a373', '#a0522d', '#ffb703']; const hats = ['none', 'cap', 'headband', 'none']; return { shirt: shirts[h % 6], skin: skins[(h >> 3) % 5], hair: hairs[(h >> 6) % 5], hat: hats[(h >> 9) % 4] }; }
-  function playerLook() { const l = Object.assign({}, P.look || lookFor(P.name)); const o = C.cosById(P.cos.outfit); if (o && o.color) l.shirt = o.color; return l; }
+  function lookFor(name) { return C.lookFromName(name); }
+  function playerLook() { const l = Object.assign({}, C.normalizeLook(P && P.look, P && P.name)); const o = P && C.cosById(P.cos.outfit); if (o && o.color) l.shirt = o.color; return l; }
+  function lookOfOpp(ob) {
+    if (!ob) return lookFor('rival');
+    if (ob.isRival || ob.rival) return D.RIVAL.look;
+    if (ob.pro && ob.pro.look) return C.normalizeLook(ob.pro.look, ob.name);
+    if (ob.card && ob.card.look) return C.normalizeLook(ob.card.look, ob.name || ob.card.name);
+    if (ob.look) return C.normalizeLook(ob.look, ob.name);
+    const pro = ob.pro && D.PROS.find(p => p.id === ob.pro); if (pro && pro.look) return C.normalizeLook(pro.look, ob.name);
+    return lookFor(ob.name || 'rival');
+  }
+  function lookEditorHtml() {
+    const A = D.APPEARANCE, sw = (key, arr) => `<div class="swatches" data-sw="${key}">` + arr.map(c => `<button type="button" class="chip" data-${key}="${c}" style="background:${c}" aria-label="${key} ${c}"></button>`).join('') + '</div>';
+    const hats = { none: 'None', cap: 'Cap', headband: 'Headband' };
+    return `<div class="lookprev" id="lookPrev"></div>
+      <div class="genders"><button type="button" class="btn gender" id="genderMale" data-g="male"><span class="gav" id="gavM"></span>Male</button><button type="button" class="btn gender pink" id="genderFemale" data-g="female"><span class="gav" id="gavF"></span>Female</button></div>
+      <p class="muted" style="margin:6px 0 2px">Skin</p>${sw('skin', A.skins)}
+      <p class="muted" style="margin:6px 0 2px">Hair</p>${sw('hair', A.hairs)}
+      <p class="muted" style="margin:6px 0 2px">Shirt</p>${sw('shirt', A.shirts)}
+      <p class="muted" style="margin:6px 0 2px">Hat</p><div class="hatrow">${A.hatChoices.map(h => `<button type="button" class="btn small gray" data-hat="${h}">${hats[h] || h}</button>`).join('')}</div>
+      <p class="muted" style="margin-top:8px">Looks only — this never changes your stats, and you can change it anytime for free.</p>`;
+  }
+  function bindLookEditor(root, state, opt) {
+    opt = opt || {};
+    const paint = () => {
+      const prev = root.querySelector('#lookPrev'); if (prev) { prev.innerHTML = ''; prev.appendChild(avatar(state, opt.previewSize || 88)); }
+      const gm = root.querySelector('#gavM'), gf = root.querySelector('#gavF');
+      if (gm) { gm.innerHTML = ''; gm.appendChild(avatar(Object.assign({}, state, { gender: 'male', hat: 'none' }), 36)); }
+      if (gf) { gf.innerHTML = ''; gf.appendChild(avatar(Object.assign({}, state, { gender: 'female', hat: 'none' }), 36)); }
+      root.querySelectorAll('[data-g]').forEach(b => b.classList.toggle('sel', (!opt.requirePick || opt._picked) && b.dataset.g === state.gender));
+      ['skin', 'hair', 'shirt'].forEach(k => root.querySelectorAll('[data-' + k + ']').forEach(b => b.classList.toggle('sel', b.getAttribute('data-' + k) === state[k])));
+      root.querySelectorAll('[data-hat]').forEach(b => { b.classList.toggle('sel', b.dataset.hat === state.hat); b.classList.toggle('green', b.dataset.hat === state.hat); b.classList.toggle('gray', b.dataset.hat !== state.hat); });
+      if (opt.onChange) opt.onChange(state);
+    };
+    root.querySelectorAll('[data-g]').forEach(b => (b.onclick = () => { state.gender = b.dataset.g; opt._picked = true; if (opt.onPickGender) opt.onPickGender(state.gender); paint(); }));
+    ['skin', 'hair', 'shirt'].forEach(k => root.querySelectorAll('[data-' + k + ']').forEach(b => (b.onclick = () => { state[k] = b.getAttribute('data-' + k); paint(); })));
+    root.querySelectorAll('[data-hat]').forEach(b => (b.onclick = () => { state.hat = b.dataset.hat; paint(); }));
+    paint();
+    return { state, paint };
+  }
+  function openLookEditor(opts) {
+    opts = opts || {}; const state = C.normalizeLook((opts.look) || (P && P.look), P && P.name);
+    modal(`<h2>✏️ Your look</h2><p class="muted">Pick male or female and the colors you like. This is only a look — stats stay the same — and you can change it anytime for free.</p><div id="lookEdit">${lookEditorHtml()}</div>`,
+      [{ label: 'Save look', cls: 'green', id: 'lookSave', fn: () => { C.setLook(P, state); persist(); if (online && online.hasNickname()) online.sync(P).catch(() => {}); toast('Look saved!'); if (opts.onDone) opts.onDone(); } }, { label: 'Cancel', cls: 'gray' }]);
+    bindLookEditor($('#lookEdit'), state);
+  }
+  function maybeOfferLook() {
+    if (!P || P.lookChosen || C.tutActive(P)) return;
+    if ($('#modal') && $('#modal').classList.contains('show')) return;
+    modal(`<h2>✏️ Your bowler</h2><div class="lookprev" id="lookOfferAv"></div><p>You can now pick whether your bowler is male or female, and change hair, skin and shirt colors. It's only a look — your stats stay the same. You can also change this anytime in ⚙️ Settings or 📊 Stats.</p>`,
+      [{ label: 'Change my look', cls: 'green', id: 'lookYes', fn: () => openLookEditor({ onDone: () => { if (current === 'hub') RENDER.hub(); else if (current === 'stats') RENDER.stats(); else if (current === 'settings') RENDER.settings(); } }) },
+       { label: 'Keep my look', cls: 'gray', id: 'lookNo', fn: () => { P.lookChosen = true; persist(); } }]);
+    const box = $('#lookOfferAv'); if (box) box.appendChild(avatar(playerLook(), 72));
+  }
 
   // ---------- Pattern card ----------
   function patternCard(pat) {
@@ -2434,16 +2564,19 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
 
   // ---------- Create / Hub ----------
   RENDER.create = () => {
+    const draft = C.normalizeLook(lookFor('New Bowler'), 'New Bowler'); let pickedGender = false;
     $('#create').innerHTML = `<h1>🎳 Pin Masters<br><span style="font-size:22px">RPG</span></h1>
       <div class="card"><h2>Create your bowler</h2><input id="nameIn" type="text" maxlength="16" placeholder="Your bowler name" value="">
-      <p class="muted">Use a nickname, not your real name. Everything saves on this device.</p><div class="row" id="lookRow"></div>
+      <p class="muted">Use a nickname, not your real name. Everything saves on this device.</p>
+      <div id="lookCreate">${lookEditorHtml()}</div>
       ${ageSelect()}
       <button class="btn green" id="startBtn" style="margin-top:10px">Start my bowling career!</button>${pendingRef() ? `<p class="muted" id="refNote">🎟️ Friend code <b>${esc(pendingRef())}</b> is saved. Use it in 🤝 Friends for bonus gems.</p>` : ''}</div>
       <div class="card muted">Bowling is auto-played: your stats, gear, special shots and the oil pattern decide every roll. Train, win, level up with no stat cap, and climb from Local Rookie to PBA Champion.</div>`;
-    const looks = [0, 1, 2, 3].map(i => lookFor('look' + i * 7)); let sel = 0; const lr = $('#lookRow');
-    looks.forEach((lk, i) => { const c = avatar(lk, 56); c.style.borderRadius = '50%'; c.style.cursor = 'pointer'; c.style.background = i === sel ? '#ddd6fe' : '#fff'; c.onclick = () => { sel = i; [...lr.children].forEach((x, j) => (x.style.background = j === sel ? '#ddd6fe' : '#fff')); }; lr.appendChild(c); });
-    $('#startBtn').onclick = () => { const age = $('#ageIn').value; if (age === '') { toast('Please choose your age first'); $('#ageIn').focus(); return; }
-      const n = $('#nameIn').value.trim() || 'Rookie'; P = C.newPlayer(n); P.createdAt = now().getTime(); P.look = looks[sel]; C.setAgeGroup(P, age); C.dailyCheck(P, now()); persist(); bootServices();
+    bindLookEditor($('#lookCreate'), draft, { requirePick: true, onPickGender: () => { pickedGender = true; } });
+    $('#startBtn').onclick = () => {
+      if (!pickedGender) { toast('Please pick Male or Female first'); $('#genderMale').focus(); return; }
+      const age = $('#ageIn').value; if (age === '') { toast('Please choose your age first'); $('#ageIn').focus(); return; }
+      const n = $('#nameIn').value.trim() || 'Rookie'; P = C.newPlayer(n); P.createdAt = now().getTime(); C.setLook(P, draft); C.setAgeGroup(P, age); C.dailyCheck(P, now()); persist(); bootServices();
       modal(`<h2>Welcome, ${esc(P.name)}!</h2>` + dialog(hal().look, `Coach Hal: "I'm Hal Quimby - I bowled on tour for thirty years. Win matches, train at the Practice Alley, and there's no limit to how good you can get. Oh, and watch out for a show-off named Brock... Let me show you around!"`), [{ label: "Let's go!", cls: 'green', id: 'welcomeBtn', fn: () => { C.tutStart(P); persist(); show('hub'); } }]); fillAvatars($('#modal')); };
   };
   RENDER.hub = () => {
@@ -2456,7 +2589,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     <p class="muted" style="text-align:center">Prototype v${D.APP_VERSION} · saves to this device · <a href="#" id="resetLink">reset save</a></p>`;
     $('#hubAv').appendChild(avatar(playerLook(), 52));
     $('#hub').querySelectorAll('[data-go]').forEach(b => (b.onclick = () => show(b.dataset.go)));
-    setTimeout(lbCheckRewards, 50);
+    setTimeout(() => { lbCheckRewards(); maybeOfferLook(); }, 50);
     $('#resetLink').onclick = e => { e.preventDefault(); modal('<h2>Reset save?</h2><p>This erases your bowler on this device. (Remove Ads can be restored with Restore Purchases.)</p>', [{ label: 'Erase', cls: 'orange', fn: () => { localStorage.removeItem(C.SAVE_KEY); localStorage.removeItem(C.LEGACY_SAVE_KEY); location.reload(); } }, { label: 'Cancel', cls: 'gray' }]); };
   };
 
@@ -2500,7 +2633,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
       if (current !== 'pvp') return;
       let html = topbar() + `<h2>⚔️ Online PvP · Elo ${o.elo}</h2><p class="muted">Playing as <b>${esc(o.nickname)}</b> · record ${o.wins}-${o.losses}. Matches replay both bowlers' cards with a shared seed. Fair Play gear cap is on.</p>`;
       if (ops.some(r => r.filler)) html += `<div class="banner">🤖 Not enough real players near your Elo yet, so some rivals are AI practice bowlers (marked AI). AI matches are unranked.</div>`;
-      ops.forEach((r, i) => { const pat = D.PATTERNS[r.pattern]; html += `<div class="card row"><span data-look="${esc(r.name)}"></span><div class="grow"><b>${nameCell(r.name, r.flair)}</b> ${r.online ? '<span class="tag ok">ONLINE</span>' : '<span class="tag">AI</span>'}<div class="muted">${r.online ? 'Elo ' + r.elo + ' · ' + r.record + ' · ' : 'Practice · unranked · '}rating ${C.rating(r.stats)} · 🛢️ ${esc(pat.name)}</div></div><button class="btn small blue" data-r="${i}">Challenge</button></div>`; });
+      ops.forEach((r, i) => { const pat = D.PATTERNS[r.pattern]; html += `<div class="card row"><span data-lk='${esc(JSON.stringify(lookOfOpp(r)))}'></span><div class="grow"><b>${nameCell(r.name, r.flair)}</b> ${r.online ? '<span class="tag ok">ONLINE</span>' : '<span class="tag">AI</span>'}<div class="muted">${r.online ? 'Elo ' + r.elo + ' · ' + r.record + ' · ' : 'Practice · unranked · '}rating ${C.rating(r.stats)} · 🛢️ ${esc(pat.name)}</div></div><button class="btn small blue" data-r="${i}">Challenge</button></div>`; });
       $('#pvp').innerHTML = html; fillAvatars($('#pvp'));
       $('#pvp').querySelectorAll('[data-r]').forEach(b => (b.onclick = () => { const r = ops[+b.dataset.r];
         if (r.online) { if (!s.canPlayRanked()) return toast('Next ranked match in ' + Math.ceil(s.waitMs() / 1000) + 's'); const prep = s.prepareMatch(P, r); prep.op.elo = r.elo;
@@ -2511,7 +2644,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   function renderSimPvp(note) {
     const rivals = C.generateRivals(P, (Date.now() / 60000) | 0, 3); RENDER.pvp.rivals = rivals;
     let html = topbar() + (note ? `<div class="banner">${note}</div>` : '') + `<div class="banner">⚠️ SIMULATED PvP — these "online" rivals are generated on your device. No real network play in this prototype.</div><h2>⚔️ Ranked PvP · ${P.pvp.rating}</h2><p class="muted">Fair Play: gear bonuses capped at 15% of base stats. Ranked uses challenge & sport patterns once you leave Bronze. Record ${P.pvp.wins}-${P.pvp.losses}.</p>`;
-    rivals.forEach((r, i) => { const pat = D.PATTERNS[r.pattern]; html += `<div class="card row"><span data-look="${esc(r.name)}"></span><div class="grow"><b>${esc(r.name)}</b> <span class="tag">SIM</span><div class="muted">Elo ${r.elo} · rating ${C.rating(r.stats)} · 🛢️ ${esc(pat.name)} <span class="tag ${pat.kind}">${pat.kind}</span></div></div><button class="btn small blue" data-r="${i}">Challenge</button></div>`; });
+    rivals.forEach((r, i) => { const pat = D.PATTERNS[r.pattern]; html += `<div class="card row"><span data-lk='${esc(JSON.stringify(lookOfOpp(r)))}'></span><div class="grow"><b>${esc(r.name)}</b> <span class="tag">SIM</span><div class="muted">Elo ${r.elo} · rating ${C.rating(r.stats)} · 🛢️ ${esc(pat.name)} <span class="tag ${pat.kind}">${pat.kind}</span></div></div><button class="btn small blue" data-r="${i}">Challenge</button></div>`; });
     $('#pvp').innerHTML = html; fillAvatars($('#pvp'));
     $('#pvp').querySelectorAll('[data-r]').forEach(b => (b.onclick = () => { const r = rivals[+b.dataset.r]; const alleys = Object.keys(D.ALLEYS).filter(a => a !== 'practice' && C.isUnlocked(P, D.ALLEYS[a])); preMatch({ mode: 'pvp', op: r, rival: r, alley: alleys[alleys.length - 1], patternId: r.pattern, line: 'GLHF! (simulated rival)' }); }));
   }
@@ -2530,7 +2663,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   };
   RENDER.stats = () => {
     const base = C.baseStats(P), eff = C.effectiveStats(base, P.equipped);
-    let html = topbar() + `<h2>📊 Stats (no cap!)</h2><div class="card muted">XP to next level = 15 × level^1.2. Every match gives XP to all stats; drills focus XP. Gear adds bonuses on top. Cosmetics never change stats.</div>`;
+    let html = topbar() + `<h2>📊 Stats (no cap!)</h2><div class="card row" id="profileCard"><span id="statsAv"></span><div class="grow"><b>${esc(P.name)}</b><div class="muted">${P.look.gender === 'female' ? 'Female' : 'Male'} bowler · look only, no stat changes</div></div><button class="btn small" id="editLookStats">✏️ Edit look</button></div><div class="card muted">XP to next level = 15 × level^1.2. Every match gives XP to all stats; drills focus XP. Gear adds bonuses on top. Cosmetics never change stats.</div>`;
     D.STATS.forEach(k => { const s = P.stats[k], need = C.xpToNext(s.level), info = D.STAT_INFO[k];
       html += `<div class="card"><div class="row"><b class="grow">${info.icon} ${info.label} · Lv ${s.level}</b><span class="tag ok">with gear ${Math.round(eff[k])}</span></div><div class="bar" style="margin:6px 0"><i style="width:${(100 * s.xp / need).toFixed(1)}%"></i></div><div class="muted">${s.xp}/${need} XP · ${info.desc}</div></div>`; });
     html += `<div class="card"><b>Rating ${C.rating(base)}</b> (${C.tierOf(C.rating(base))}) — sum of base stats, used for leaderboards and matchmaking.${P.xpBoost ? `<br><span class="tag">Double XP: ${P.xpBoost} matches</span>` : ''}</div>`;
@@ -2540,7 +2673,8 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
       L.trophies.slice(0, 20).forEach(t => { const on = L.flair && L.flair.src === t.id, b = C.lbBadgeInfo(t.badge);
         html += `<div class="row" style="margin-top:6px"><span style="font-size:24px">${b.icon}</span><div class="grow"><b style="${frameStyle(t.frame)}">${esc(b.name)}</b><div class="muted">${esc(C.lbLabel(t.id))} · #${t.rank} of ${t.total}${t.frame ? ' · ' + esc(D.LB_REWARDS.frames[t.frame].name) + ' frame' : ''}</div></div>${on ? '<span class="tag ok">Wearing</span>' : `<button class="btn small" data-wear="${t.id}">Wear</button>`}</div>`; });
       html += (L.flair ? '<button class="btn small gray" data-wear="" style="margin-top:8px">Hide my badge</button>' : '') + '</div>'; }
-    $('#stats').innerHTML = html;
+    $('#stats').innerHTML = html; $('#statsAv').appendChild(avatar(playerLook(), 52));
+    $('#editLookStats').onclick = () => openLookEditor({ onDone: () => RENDER.stats() });
     $('#stats').querySelectorAll('[data-wear]').forEach(b => (b.onclick = () => { C.lbWear(P, b.dataset.wear || null); persist(); if (online && online.hasNickname()) online.sync(P).catch(() => {}); RENDER.stats(); toast(b.dataset.wear ? 'Badge on!' : 'Badge hidden'); }));
   };
   // ---------- v0.8 leaderboard rewards (flair, rewards panel, claim modal) ----------
@@ -2597,10 +2731,10 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
       let lb; try { lb = await s.leaderboard(lbTab, P); } catch (e) { return renderLocalBoard('📴 The online leaderboard is unavailable right now. Showing your local board.'); }
       if (current !== 'leaderboard') return; const per = lbTab === 'week' || lbTab === 'season';
       let html = head + (per ? rewardsPanel(lbTab, lb.me ? { rank: lb.me.rank, total: lb.total, games: lb.me.games } : null) : '') + `<p class="muted">${esc(lb.period)} · top ${lb.rows.length}${per && lb.total ? ' of ' + lb.total : ''}${s.hasNickname() ? '' : ' · <a href="#" id="lbName">pick an online name</a> to appear here'}</p><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th>${per ? '<th>Games</th>' : '<th>Tier</th>'}<th>${esc(lb.label)}</th></tr>`;
-      lb.rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${nameCell(r.name, r.flair, r.you)}</td><td>${per ? r.games : r.tier}</td><td>${r.value}</td></tr>`));
+      lb.rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${r.you ? `<span class="lbav" data-lk="${esc(JSON.stringify(playerLook()))}"></span>` : ''}${nameCell(r.name, r.flair, r.you)}</td><td>${per ? r.games : r.tier}</td><td>${r.value}</td></tr>`));
       if (!lb.rows.length) html += '<tr><td colspan="4" class="muted">No scores yet. Be the first!</td></tr>';
       html += '</table></div>' + (lb.me && !lb.rows.some(r => r.you) ? `<div class="card"><b>Your rank: #${lb.me.rank}</b> · ${esc(lb.label)} ${lb.me.value}</div>` : '');
-      $('#leaderboard').innerHTML = html; bindTabs(); const ln = $('#lbName'); if (ln) ln.onclick = e => { e.preventDefault(); nameBuilder(() => RENDER.leaderboard()); };
+      $('#leaderboard').innerHTML = html; fillAvatars($('#leaderboard')); bindTabs(); const ln = $('#lbName'); if (ln) ln.onclick = e => { e.preventDefault(); nameBuilder(() => RENDER.leaderboard()); };
     });
   }
   // Offline: rating board (as before) + simulated weekly / season boards with real (on-device) rewards.
@@ -2610,17 +2744,17 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     if (lbTab === 'rating') {
       const rows = C.leaderboard(P); const f = C.lbEnsure(P).flair;
       html += `<div class="banner">Local leaderboard (on-device). Turn on online play for real players.</div><div class="card"><table class="lb"><tr><th>#</th><th>Bowler</th><th>Tier</th><th>Rating</th><th>Best</th></tr>`;
-      rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${r.you ? nameCell(r.name, f) : esc(r.name)}</td><td>${r.tier}</td><td>${r.rating}</td><td>${r.best}</td></tr>`));
+      rows.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${r.you ? `<span class="lbav" data-lk="${esc(JSON.stringify(playerLook()))}"></span>` + nameCell(r.name, f) : esc(r.name)}</td><td>${r.tier}</td><td>${r.rating}</td><td>${r.best}</td></tr>`));
       html += '</table></div>';
     } else {
       const ms = now().getTime(), id = C.lbPeriod(lbTab, ms), me = C.lbMe(P, lbTab), st = C.lbStanding(id, C.lbSimBoard(id, ms), me), f = C.lbEnsure(P).flair;
       html += rewardsPanel(lbTab, me.games ? { rank: st.you.rank, total: st.total, games: me.games } : { rank: null, total: st.total, games: 0 });
       html += `<p class="muted">${esc(C.lbLabel(id))} · best single game · ${st.total} bowlers · simulated on this device</p><div class="card"><table class="lb" id="lbTable"><tr><th>#</th><th>Bowler</th><th>Games</th><th>Best</th></tr>`;
       const top = st.rows.slice(0, 25); if (st.you && !top.includes(st.you)) top.push(st.you);
-      top.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${r.you ? nameCell(r.name, f) : esc(r.name)}</td><td>${r.games}</td><td>${r.value}</td></tr>`));
+      top.forEach(r => (html += `<tr class="${r.you ? 'you' : ''}"><td>${r.rank}</td><td>${r.you ? `<span class="lbav" data-lk="${esc(JSON.stringify(playerLook()))}"></span>` + nameCell(r.name, f) : esc(r.name)}</td><td>${r.games}</td><td>${r.value}</td></tr>`));
       html += '</table></div>';
     }
-    $('#leaderboard').innerHTML = html;
+    $('#leaderboard').innerHTML = html; fillAvatars($('#leaderboard'));
     $('#leaderboard').querySelectorAll('[data-lb]').forEach(b => (b.onclick = () => { lbTab = b.dataset.lb; RENDER.leaderboard(); }));
   }
 
@@ -2630,7 +2764,9 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     const row = (id, ic, label, desc, on, vol) => `<div class="card"><div class="row"><span style="font-size:28px">${ic}</span><div class="grow"><b>${label}</b><div class="muted">${desc}</div></div><button class="btn small toggle ${on ? 'green' : 'gray'}" id="${id}Toggle" role="switch" aria-checked="${on}">${on ? 'ON' : 'OFF'}</button></div><label class="row vol"><span class="muted">Volume</span><input type="range" class="grow" id="${id}Vol" min="0" max="100" step="5" value="${Math.round(vol * 100)}" ${on ? '' : 'disabled'}><b id="${id}VolTxt" style="width:42px;text-align:right">${Math.round(vol * 100)}%</b></label></div>`;
     $('#settings').innerHTML = topbar() + `<h2>⚙️ Settings</h2>${sup ? '' : '<div class="banner">This browser has no Web Audio support, so the game will be silent.</div>'}` +
       row('sfx', '🔊', 'Sound Effects', 'Ball roll, pin crashes, cheers, buttons', st.sfx, st.sfxVol) + row('music', '🎵', 'Music', 'Menu, match and rival themes', st.music, st.musicVol) +
-      `<button class="btn" id="testSfx">▶ Test sound</button><h2 style="margin-top:14px">🎓 Coach Hal</h2><div class="card"><div class="row"><span style="font-size:28px">💡</span><div class="grow"><b>Coach tips</b><div class="muted">A quick tip the first time you open a screen</div></div><button class="btn small toggle ${P.tutorial.tips !== false ? 'green' : 'gray'}" id="tipsToggle" role="switch" aria-checked="${P.tutorial.tips !== false}">${P.tutorial.tips !== false ? 'ON' : 'OFF'}</button></div><button class="btn green" id="replayTut" style="margin-top:8px">🔁 Replay tutorial</button><div class="muted" style="margin-top:4px">${P.tutorial.rewarded ? 'Tour reward already collected.' : `Finish the tour to earn ${D.TUTORIAL.reward} coins.`}</div></div><div class="card muted" style="margin-top:10px">All sounds and music are original and made in code. Settings save on this device.<br>📱 iPhone: if you hear nothing, turn off Silent Mode (the switch on the side of the phone) and turn the volume up.</div>` +
+      `<button class="btn" id="testSfx">▶ Test sound</button>
+      <h2 style="margin-top:14px">✏️ Your look</h2><div class="card row" id="lookCard"><span id="setAv"></span><div class="grow"><b>${esc(P.name)}</b><div class="muted">${P.look.gender === 'female' ? 'Female' : 'Male'} · change anytime for free. Looks never change stats.</div></div><button class="btn small" id="editLook">✏️ Edit look</button></div>
+      <h2 style="margin-top:14px">🎓 Coach Hal</h2><div class="card"><div class="row"><span style="font-size:28px">💡</span><div class="grow"><b>Coach tips</b><div class="muted">A quick tip the first time you open a screen</div></div><button class="btn small toggle ${P.tutorial.tips !== false ? 'green' : 'gray'}" id="tipsToggle" role="switch" aria-checked="${P.tutorial.tips !== false}">${P.tutorial.tips !== false ? 'ON' : 'OFF'}</button></div><button class="btn green" id="replayTut" style="margin-top:8px">🔁 Replay tutorial</button><div class="muted" style="margin-top:4px">${P.tutorial.rewarded ? 'Tour reward already collected.' : `Finish the tour to earn ${D.TUTORIAL.reward} coins.`}</div></div><div class="card muted" style="margin-top:10px">All sounds and music are original and made in code. Settings save on this device.<br>📱 iPhone: if you hear nothing, turn off Silent Mode (the switch on the side of the phone) and turn the volume up.</div>` +
       onlineCard() +
       `<h2 style="margin-top:14px">📜 Privacy &amp; Terms</h2><div class="card" id="legalCard"><div class="grid"><a class="btn blue" id="privacyLink" href="privacy.html" style="text-decoration:none;text-align:center">🔒 Privacy Policy</a><a class="btn blue" id="termsLink" href="terms.html" style="text-decoration:none;text-align:center">📜 Terms of Use</a></div><a class="btn gray" id="deleteDataLink" href="privacy.html#delete" style="text-decoration:none;text-align:center;display:block;margin-top:8px">🗑️ Delete my data</a><div class="muted" style="margin-top:6px">No chat, no real names needed. Your progress saves on this device.</div></div>`;
     const bind = k => {
@@ -2641,6 +2777,8 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     bind('sfx'); bind('music');
     $('#tipsToggle').onclick = () => { C.setTips(P, P.tutorial.tips === false); persist(); RENDER.settings(); };
     $('#replayTut').onclick = () => { C.tutReplay(P); persist(); show('hub'); };
+    $('#setAv').appendChild(avatar(playerLook(), 52));
+    $('#editLook').onclick = () => openLookEditor({ onDone: () => RENDER.settings() });
     bindOnlineCard();
     $('#testSfx').onclick = () => { sfx('release'); sfx('pins', { count: 10, strike: true, delay: 0.5 }); sfx('strike', { delay: 0.7 }); };
   };
@@ -2923,7 +3061,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     const ob = cfg.op.simulated || cfg.op.isBowler ? cfg.op : C.opponentBowler(cfg.op); const me = cfg.prep ? cfg.prep.me : C.playerBowler(P, { fairPlay: cfg.mode === 'pvp' });
     const fit = C.laneFit(C.ballProfile(me.ball, me.condition).hook, me.stats.spin / (C.rating(me.stats) / 5), pat, 0);
     const fitTxt = fit > 0.75 ? '<span class="tag ok">Great fit for this pattern</span>' : fit > 0.45 ? '<span class="tag">OK fit</span>' : '<span class="tag warn">Poor fit - try another ball</span>';
-    const look = ob.isRival ? D.RIVAL.look : ob.pro && ob.pro.look ? ob.pro.look : lookFor(ob.name);
+    const look = lookOfOpp(ob);
     modal(`<h2>${cfg.mode === 'pvp' ? (cfg.online ? '⚔️ Online PvP (ranked)' : cfg.unranked ? '🤖 AI practice (unranked)' : '⚔️ PvP (simulated)') : cfg.mode === 'story' ? (cfg.final ? '🏆 Title Final' : '📖 Story match') : '🎳 Exhibition'}</h2><div class="muted">${alley.name} · difficulty ${alley.difficulty}</div>
       ${dialog(look, `<b>${esc(ob.name)}${ob.isRival ? ' "Showtime"' : ''}:</b> "${esc(cfg.line || 'Good luck!')}"`, ob.isRival ? 'brock' : '')}
       ${ob.isRival ? modalTip('brock') : ''}${pat.kind === 'sport' ? modalTip('sport') : ''}${patternCard(pat)}${dialog(hal().look, `Coach Hal: "${pat.kind === 'sport' ? 'Sport shot - misses get punished. ' : ''}Try a ${C.recommendBall(pat).toLowerCase()} here.${C.altBallHook(P) != null ? ' Your second ball is ready for when the lanes break down.' : ''}"`)}
@@ -2940,8 +3078,12 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     const res = C.playMatch(cfg.prep ? cfg.prep.me : P, ob, cfg.alley, seed, { fairPlay: cfg.mode === 'pvp', useRosin, scripted: cfg.scripted, patternId: pat && pat.id ? pat.id : (cfg.patternId || undefined) });
     const alley = D.ALLEYS[cfg.alley]; const ball = C.ballById(P.equipped.ball);
     show('match'); skip = false; speed = fast() ? 8 : 1; AU.music(ob.isRival || cfg.final ? 'tense' : 'match');
-    $('#match').innerHTML = `<div class="row" style="margin-bottom:6px"><b class="grow" style="color:#4c1d95">${alley.name}</b>${cfg.mode === 'pvp' ? (cfg.online ? '<span class="tag ok">ONLINE PvP</span>' : cfg.unranked ? '<span class="tag">AI PRACTICE</span>' : '<span class="tag warn">SIMULATED PvP</span>') : ''}<span class="tag ${res.pattern.kind}">🛢️ ${esc(res.pattern.name)}</span></div><canvas id="lane"></canvas><div id="sc"></div><div class="speed"><button class="btn small" data-sp="1">1x</button><button class="btn small" data-sp="3">3x</button><button class="btn small orange" id="skipBtn">Skip ⏭</button></div>${C.tutStep(P) && C.tutStep(P).id === 'match' ? `<div class="tutmatch" id="tutMatchTip"><span class="tav"></span><div><b>Coach Hal:</b> ${esc(C.tutStep(P).text)}</div></div>` : ''}`;
-    lane = new Lane($('#lane'), { theme: alley.theme, alleyName: alley.name, pattern: res.pattern }); window.__lane = lane; { const tv = $('#tutMatchTip .tav'); if (tv) tv.appendChild(avatar(hal().look, 34)); }
+    $('#match').innerHTML = `<div class="row" style="margin-bottom:4px"><b class="grow" style="color:#4c1d95">${alley.name}</b>${cfg.mode === 'pvp' ? (cfg.online ? '<span class="tag ok">ONLINE PvP</span>' : cfg.unranked ? '<span class="tag">AI PRACTICE</span>' : '<span class="tag warn">SIMULATED PvP</span>') : ''}<span class="tag ${res.pattern.kind}">🛢️ ${esc(res.pattern.name)}</span></div>
+      <div class="row matchheads"><span id="meAv"></span><b class="grow">${esc(P.name)}</b><span class="muted">vs</span><b>${esc(ob.name)}</b><span id="opAv"></span></div>
+      <canvas id="lane"></canvas><div id="sc"></div><div class="speed"><button class="btn small" data-sp="1">1x</button><button class="btn small" data-sp="3">3x</button><button class="btn small orange" id="skipBtn">Skip ⏭</button></div>${C.tutStep(P) && C.tutStep(P).id === 'match' ? `<div class="tutmatch" id="tutMatchTip"><span class="tav"></span><div><b>Coach Hal:</b> ${esc(C.tutStep(P).text)}</div></div>` : ''}`;
+    lane = new Lane($('#lane'), { theme: alley.theme, alleyName: alley.name, pattern: res.pattern }); window.__lane = lane;
+    $('#meAv').appendChild(avatar(playerLook(), 40)); $('#opAv').appendChild(avatar(lookOfOpp(ob), 40));
+    { const tv = $('#tutMatchTip .tav'); if (tv) tv.appendChild(avatar(hal().look, 34)); }
     $('#match').querySelectorAll('[data-sp]').forEach(b => (b.onclick = () => (speed = +b.dataset.sp)));
     $('#skipBtn').onclick = () => (skip = true);
     const A = { name: P.name, rolls: [] }, B = { name: ob.name, rolls: [] };
@@ -3105,7 +3247,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   }
   function offerTour() {
     modal(`<h2>🎓 New: Coach Hal's tour</h2>` + dialog(hal().look, `Coach Hal: "Want a quick tour of everything in Pin Masters? It takes about a minute${P.tutorial.rewarded ? '' : ` and pays ${D.TUTORIAL.reward} coins`}."`),
-      [{ label: 'Take the tour', cls: 'green', id: 'tourYes', fn: () => { C.tutStart(P); persist(); show('hub'); } }, { label: 'No thanks', cls: 'gray', id: 'tourNo', fn: () => { C.tutDecline(P); persist(); toast('No problem! You can take it later in ⚙️ Settings.'); tutRefresh(); } }]);
+      [{ label: 'Take the tour', cls: 'green', id: 'tourYes', fn: () => { C.tutStart(P); persist(); show('hub'); } }, { label: 'No thanks', cls: 'gray', id: 'tourNo', fn: () => { C.tutDecline(P); persist(); toast('No problem! You can take it later in ⚙️ Settings.'); tutRefresh(); maybeOfferLook(); } }]);
     fillAvatars($('#modal'));
   }
 
