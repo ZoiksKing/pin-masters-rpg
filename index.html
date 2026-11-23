@@ -4,7 +4,7 @@
 <meta name="theme-color" content="#7c3aed"><meta name="color-scheme" content="light">
 <meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="Pin Masters">
-<meta name="app-version" content="0.8.2"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
+<meta name="app-version" content="0.8.3"><meta name="format-detection" content="telephone=no"><meta name="description" content="Pin Masters RPG - a family-friendly bowling RPG (prototype).">
 <link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png"><title>Pin Masters RPG (prototype)</title>
 <style>*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -119,7 +119,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
 /* v0.8.1 story chapter gate */
 .gatebox{background:#fff7ed;border:2px dashed #fdba74;border-radius:12px;padding:10px;margin:8px 0}.gatebar{height:14px}.gatebar>i{background:linear-gradient(90deg,#f59e0b,#facc15)}
 
-/* v0.8.2 character creation / appearance */
+/* v0.8.3 character creation / appearance */
 .genders{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:8px 0}
 .btn.gender{display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 8px}
 .btn.gender.sel{box-shadow:0 4px 0 #4c1d95,0 0 0 3px #4c1d95}
@@ -556,12 +556,14 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   const RIVAL_FIRST = ['Ace', 'Bowlie', 'Pinny', 'Rolla', 'Sparky', 'Turbo', 'Lucky', 'Ziggy', 'Mango', 'Pixel', 'Nova', 'Echo', 'Comet', 'Waffles', 'Jinx'];
   const RIVAL_LAST = ['Striker', 'McSpare', 'Gutterless', 'Hookshot', 'Tenpin', 'Rollwell', 'Pocketeer', 'Splitz', 'Lanejump', 'Backend'];
 
-  // v0.8.2 character appearance (cosmetic only: no stat changes, no paid items)
+  // v0.8.3 character appearance (cosmetic only: no stat changes, no paid items)
   const APPEARANCE = {
     genders: ['male', 'female'],
     shirts: ['#ef476f', '#118ab2', '#06d6a0', '#ffd166', '#8338ec', '#fb5607', '#264653', '#ec4899'],
     skins: ['#ffdbac', '#f1c27d', '#e0ac69', '#c68642', '#8d5524'],
     hairs: ['#111111', '#222222', '#6d4c41', '#d4a373', '#a0522d', '#ffb703', '#f4f1de'],
+    hairStyles: ['short', 'ponytail', 'bob', 'long'],
+    hairStyleLabels: { short: 'Short', ponytail: 'Ponytail', bob: 'Bob', long: 'Long' },
     hats: ['none', 'cap', 'headband', 'visor', 'bandana'],
     hatChoices: ['none', 'cap', 'headband'],
     // Story / named NPCs who should render with the female hair silhouette.
@@ -569,7 +571,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
   };
 
   // Guided first-time tutorial (Coach Hal) + one-time contextual tips. Steps run in order; `action` steps wait for the player to tap the target.
-  const APP_VERSION = '0.8.2';
+  const APP_VERSION = '0.8.3';
   const TUTORIAL = {
     reward: 100,
     steps: [
@@ -876,14 +878,17 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     // v0.8.1 chapter gates. Saves from before v0.8.1 keep every chapter they could already reach (never lock anyone out mid-story).
     if (p.story.open == null) p.story.open = p.story.chapter;
     if (!p.story.loss) p.story.loss = { key: null, n: 0 };
-    // v0.8.2 appearance. Older saves keep the current (male) look and get a one-time prompt; changing look is always free and never changes stats.
+    // v0.8.2/0.8.3 appearance. Older saves keep the current (male, short) look and get a one-time prompt; changing look is always free and never changes stats.
+    // Missing hairStyle migrates to the gender default (ponytail for female, short for male).
     p.look = normalizeLook(p.look, p.name);
     if (p.lookChosen == null) p.lookChosen = false;
     return p;
   }
 
-  // ---------- Appearance (v0.8.2, cosmetic only) ----------
+  // ---------- Appearance (v0.8.3, cosmetic only) ----------
   const HEX = /^#([0-9A-Fa-f]{3}|[0-9A-Fa-f]{6})$/;
+  const HAIR_STYLES = () => (D.APPEARANCE.hairStyles || ['short', 'ponytail', 'bob', 'long']);
+  function defaultHairStyle(gender) { return gender === 'female' ? 'ponytail' : 'short'; }
   function validColor(s, extra) { return typeof s === 'string' && (HEX.test(s) || (extra && extra.indexOf(s) >= 0)); }
   function pickFrom(list, i, fallback) { return (list && list.length && list[i % list.length]) || fallback; }
   function lookFromName(name) {
@@ -893,18 +898,22 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     const gender = (A.femaleNames || []).indexOf(first) >= 0 ? 'female' : 'male';
     return {
       gender, shirt: pickFrom(A.shirts, h, '#118ab2'), skin: pickFrom(A.skins, h >> 3, '#f1c27d'),
-      hair: pickFrom(A.hairs, h >> 6, '#222222'), hat: pickFrom(A.hats, h >> 9, 'none')
+      hair: pickFrom(A.hairs, h >> 6, '#222222'), hat: pickFrom(A.hats, h >> 9, 'none'),
+      hairStyle: defaultHairStyle(gender)
     };
   }
   function normalizeLook(look, name) {
     const base = lookFromName(name), src = look && typeof look === 'object' ? look : {};
     const hatOk = (D.APPEARANCE.hats || ['none', 'cap', 'headband', 'visor', 'bandana']);
+    const styleOk = HAIR_STYLES();
+    const gender = src.gender === 'female' ? 'female' : 'male';
     const out = {
-      gender: src.gender === 'female' ? 'female' : 'male',
+      gender,
       shirt: validColor(src.shirt, ['rainbow']) ? src.shirt : base.shirt,
       hair: validColor(src.hair) ? src.hair : base.hair,
       skin: validColor(src.skin) ? src.skin : base.skin,
-      hat: hatOk.indexOf(src.hat) >= 0 ? src.hat : (src.hat == null && hatOk.indexOf(base.hat) >= 0 ? base.hat : 'none')
+      hat: hatOk.indexOf(src.hat) >= 0 ? src.hat : (src.hat == null && hatOk.indexOf(base.hat) >= 0 ? base.hat : 'none'),
+      hairStyle: styleOk.indexOf(src.hairStyle) >= 0 ? src.hairStyle : defaultHairStyle(gender)
     };
     if (src.sparkle) out.sparkle = true;
     return out;
@@ -1275,7 +1284,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     const lk = normalizeLook(p.look, p.name);
     return { name: String(name || p.name).slice(0, 16), stats: st, ballId: b.ball.id, cond: r2(b.condition), spareBonus: r2(b.spareBonus || 0), altHook: b.altHook == null ? null : r2(b.altHook),
       skills: (b.skills || []).slice(0, 3).map(s => ({ id: s.id, level: s.level })), cos: { outfit: p.cos.outfit || null, ball: p.cos.ball || null, celebration: p.cos.celebration || null },
-      look: { gender: lk.gender, shirt: lk.shirt, hair: lk.hair, skin: lk.skin, hat: lk.hat }, rating: rating(baseStats(p)) };
+      look: { gender: lk.gender, shirt: lk.shirt, hair: lk.hair, skin: lk.skin, hat: lk.hat, hairStyle: lk.hairStyle }, rating: rating(baseStats(p)) };
   }
   function cardToBowler(card) {
     const ball = ballById(card.ballId) || ballById('house_ball'); const st = {}; D.STATS.forEach(k => (st[k] = Math.max(0, +card.stats[k] || 0)));
@@ -1289,7 +1298,10 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
       const spread = 0.8 + rng() * 0.4; const st = {};
       D.STATS.forEach(k => (st[k] = Math.max(3, Math.round(base[k] * spread * (0.85 + rng() * 0.3) + 4))));
       const name = D.RIVAL_FIRST[Math.floor(rng() * D.RIVAL_FIRST.length)] + ' ' + D.RIVAL_LAST[Math.floor(rng() * D.RIVAL_LAST.length)];
-      const look = normalizeLook(Object.assign(lookFromName(name), { gender: rng() < 0.5 ? 'female' : 'male' }), name);
+      const gender = rng() < 0.5 ? 'female' : 'male';
+      const styles = gender === 'female' ? ['ponytail', 'bob', 'long'] : HAIR_STYLES();
+      const hairStyle = styles[Math.floor(rng() * styles.length)] || defaultHairStyle(gender);
+      const look = normalizeLook(Object.assign(lookFromName(name), { gender, hairStyle }), name);
       out.push({ name, stats: st, ballHook: 0.5 + rng() * 0.7, spareBonus: 0.02, elo: Math.round(p.pvp.rating + (rng() - 0.5) * 200), simulated: true, pattern: pool[Math.floor(rng() * pool.length)], look });
     }
     return out;
@@ -2428,26 +2440,369 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     (root || document).querySelectorAll('[data-lk]').forEach(e => { if (!e.firstChild) e.appendChild(avatar(JSON.parse(e.dataset.lk), 40)); });
   }
 
+  function parseHex(c) {
+    let h = String(c || '#222222').replace('#', '');
+    if (h.length === 3) h = h.split('').map(x => x + x).join('');
+    const n = parseInt(h, 16);
+    if (!isFinite(n)) return { r: 34, g: 34, b: 34 };
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+  function rgb(c) { return 'rgb(' + Math.round(c.r) + ',' + Math.round(c.g) + ',' + Math.round(c.b) + ')'; }
+  function mix(a, b, t) { return { r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t }; }
+  function shade(c, a) { return mix(c, { r: 0, g: 0, b: 0 }, a); }
+  function tint(c, a) { return mix(c, { r: 255, g: 255, b: 255 }, a); }
+  function hairPal(hex) {
+    const c = parseHex(hex);
+    const lum = (c.r * 0.6 + c.g * 0.3 + c.b * 0.1) / 255;
+    // Light hair gets a warm, soft outline so it doesn't look like a sticker
+    const outline = lum > 0.72
+      ? mix(shade(c, 0.28), { r: 120, g: 90, b: 70 }, 0.35)
+      : shade(c, lum > 0.45 ? 0.42 : 0.52);
+    return {
+      base: rgb(c),
+      mid: rgb(shade(c, lum > 0.7 ? 0.08 : 0.12)),
+      dark: rgb(shade(c, lum > 0.7 ? 0.18 : 0.26)),
+      deep: rgb(shade(c, lum > 0.7 ? 0.3 : 0.4)),
+      light: rgb(tint(c, lum > 0.75 ? 0.18 : (lum < 0.15 ? 0.28 : 0.38))),
+      outline: rgb(outline),
+      lum
+    };
+  }
+
   function avatar(look, size) {
-    look = C.normalizeLook(look, ''); size = size || 52; const c = document.createElement('canvas'); c.width = c.height = size * 2; c.style.width = c.style.height = size + 'px';
-    const g = c.getContext('2d'); g.scale(2, 2); const s = size, fem = look.gender === 'female';
-    if (look.shirt === 'rainbow') { const gr = g.createLinearGradient(0, s * 0.7, s, s); ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'].forEach((c2, i) => gr.addColorStop(i / 4, c2)); g.fillStyle = gr; } else g.fillStyle = look.shirt;
+    look = C.normalizeLook(look, '');
+    size = size || 52;
+    const c = document.createElement('canvas'); c.width = c.height = size * 2; c.style.width = c.style.height = size + 'px';
+    const g = c.getContext('2d'); g.scale(2, 2);
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    const s = size, cx = s / 2, cy = s * 0.45, r = s * 0.24;
+    const style = look.hairStyle || (look.gender === 'female' ? 'ponytail' : 'short');
+    const pal = hairPal(look.hair);
+    const lw = Math.max(0.65, s * 0.015);
+    g.lineWidth = lw;
+
+    if (look.shirt === 'rainbow') {
+      const gr = g.createLinearGradient(0, s * 0.7, s, s);
+      ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7'].forEach((c2, i) => gr.addColorStop(i / 4, c2));
+      g.fillStyle = gr;
+    } else g.fillStyle = look.shirt;
     g.beginPath(); g.ellipse(s / 2, s * 0.98, s * 0.38, s * 0.3, 0, Math.PI, 0); g.fill();
-    if (look.sparkle) { g.fillStyle = '#fff'; [[0.3, 0.8], [0.55, 0.88], [0.7, 0.78], [0.42, 0.93]].forEach(([x, y]) => { g.beginPath(); g.arc(s * x, s * y, s * 0.025, 0, 7); g.fill(); }); g.strokeStyle = '#b45309'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(s * 0.5, s * 0.7); g.lineTo(s * 0.5, s); g.stroke(); }
-    // Longer hair is drawn behind the head so the female silhouette reads clearly at small sizes.
-    if (fem) { g.fillStyle = look.hair; g.beginPath(); g.ellipse(s / 2, s * 0.58, s * 0.33, s * 0.36, 0, 0, Math.PI * 2); g.fill(); g.beginPath(); g.ellipse(s * 0.25, s * 0.6, s * 0.1, s * 0.22, 0.2, 0, Math.PI * 2); g.ellipse(s * 0.75, s * 0.6, s * 0.1, s * 0.22, -0.2, 0, Math.PI * 2); g.fill(); }
-    g.fillStyle = look.skin; g.beginPath(); g.arc(s / 2, s * 0.45, s * 0.24, 0, Math.PI * 2); g.fill();
-    g.fillStyle = look.hair; g.beginPath(); g.arc(s / 2, s * 0.4, s * 0.25, Math.PI * 1.05, Math.PI * 1.95); g.fill();
-    if (fem) { g.beginPath(); g.ellipse(s / 2, s * 0.3, s * 0.23, s * 0.11, 0, Math.PI, Math.PI * 2); g.fill(); }
-    if (look.sparkle) { g.beginPath(); g.moveTo(s * 0.35, s * 0.2); g.lineTo(s * 0.5, s * 0.05); g.lineTo(s * 0.62, s * 0.2); g.fill(); }
-    if (look.hat === 'cap') { g.fillStyle = look.shirt === 'rainbow' ? '#3b82f6' : look.shirt; g.fillRect(s * 0.26, s * 0.2, s * 0.48, s * 0.1); g.fillRect(s * 0.5, s * 0.26, s * 0.3, s * 0.05); }
-    if (look.hat === 'headband' || look.hat === 'bandana') { g.fillStyle = look.hat === 'bandana' ? '#e76f51' : '#fff'; g.fillRect(s * 0.27, s * 0.3, s * 0.46, s * 0.06); }
-    if (look.hat === 'visor') { g.fillStyle = '#fff'; g.fillRect(s * 0.3, s * 0.25, s * 0.5, s * 0.05); }
-    g.fillStyle = '#222'; g.beginPath(); g.arc(s * 0.42, s * 0.46, s * 0.025, 0, 7); g.arc(s * 0.58, s * 0.46, s * 0.025, 0, 7); g.fill();
-    if (fem) { g.strokeStyle = '#222'; g.lineWidth = 1.1; g.beginPath(); g.moveTo(s * 0.36, s * 0.44); g.lineTo(s * 0.32, s * 0.42); g.moveTo(s * 0.64, s * 0.44); g.lineTo(s * 0.68, s * 0.42); g.stroke(); }
-    g.strokeStyle = '#7a3e2e'; g.lineWidth = 1.5; g.beginPath(); g.arc(s / 2, s * 0.52, s * 0.08, 0.2, Math.PI - 0.2); g.stroke();
+    if (look.sparkle) {
+      g.fillStyle = '#fff';
+      [[0.3, 0.8], [0.55, 0.88], [0.7, 0.78], [0.42, 0.93]].forEach(([x, y]) => { g.beginPath(); g.arc(s * x, s * y, s * 0.025, 0, 7); g.fill(); });
+      g.strokeStyle = '#b45309'; g.lineWidth = 1.2; g.beginPath(); g.moveTo(s * 0.5, s * 0.7); g.lineTo(s * 0.5, s); g.stroke();
+      g.lineWidth = lw;
+    }
+
+    drawHairBack(g, s, cx, cy, r, style, pal, look.shirt);
+
+    g.fillStyle = look.skin;
+    g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
+
+    drawHairFront(g, s, cx, cy, r, style, pal, look.hat);
+    // Brock's signature tuft sits on the crown (hat: none)
+    if (look.sparkle) {
+      g.fillStyle = pal.base;
+      g.beginPath(); g.moveTo(s * 0.35, s * 0.2); g.lineTo(s * 0.5, s * 0.05); g.lineTo(s * 0.62, s * 0.2); g.fill();
+    }
+    drawHat(g, s, cx, cy, r, look, { skipVisor: true });
+    if (style !== 'short') drawBangs(g, s, cx, cy, r, pal, look.hat);
+    if (look.hat === 'visor') drawVisor(g, s, cx, cy, r);
+
+    g.fillStyle = '#222';
+    g.beginPath(); g.arc(s * 0.42, s * 0.46, s * 0.025, 0, 7); g.arc(s * 0.58, s * 0.46, s * 0.025, 0, 7); g.fill();
+    if (look.gender === 'female') {
+      g.strokeStyle = '#222'; g.lineWidth = Math.max(0.6, s * 0.01);
+      g.beginPath();
+      g.moveTo(s * 0.38, s * 0.445); g.quadraticCurveTo(s * 0.365, s * 0.432, s * 0.352, s * 0.438);
+      g.moveTo(s * 0.62, s * 0.445); g.quadraticCurveTo(s * 0.635, s * 0.432, s * 0.648, s * 0.438);
+      g.stroke();
+    }
+    g.strokeStyle = '#7a3e2e'; g.lineWidth = Math.max(1, s * 0.028);
+    g.beginPath(); g.arc(s / 2, s * 0.52, s * 0.08, 0.2, Math.PI - 0.2); g.stroke();
     return c;
   }
+
+  function drawHairBack(g, s, cx, cy, r, style, pal, shirt) {
+    g.fillStyle = pal.base; g.strokeStyle = pal.outline; g.lineWidth = Math.max(0.65, s * 0.015);
+    if (style === 'short') return;
+
+    if (style === 'ponytail') {
+      // A little hair behind the left side of the neck — slim, not a helmet disc
+      g.beginPath();
+      g.moveTo(cx - r * 0.85, cy + r * 0.15);
+      g.bezierCurveTo(cx - r * 1.12, cy + r * 0.35, cx - r * 1.0, cy + r * 0.85, cx - r * 0.55, cy + r * 0.95);
+      g.quadraticCurveTo(cx - r * 0.5, cy + r * 0.55, cx - r * 0.7, cy + r * 0.2);
+      g.closePath(); g.fill(); g.stroke();
+
+      // Ponytail: gathered behind the right ear, soft falling S-curve, rounded tip
+      g.beginPath();
+      g.moveTo(cx + r * 0.25, cy - r * 0.2);
+      g.bezierCurveTo(cx + r * 0.85, cy - r * 0.7, cx + r * 1.42, cy - r * 0.05, cx + r * 1.28, cy + r * 0.85);
+      g.bezierCurveTo(cx + r * 1.18, cy + r * 1.55, cx + r * 0.78, cy + r * 1.72, cx + r * 0.68, cy + r * 1.25);
+      g.bezierCurveTo(cx + r * 0.62, cy + r * 0.7, cx + r * 0.55, cy + r * 0.2, cx + r * 0.2, cy + r * 0.05);
+      g.closePath(); g.fill(); g.stroke();
+
+      // underside shade
+      g.fillStyle = pal.dark; g.globalAlpha = 0.32;
+      g.beginPath();
+      g.moveTo(cx + r * 1.05, cy + r * 0.25);
+      g.bezierCurveTo(cx + r * 1.22, cy + r * 0.7, cx + r * 1.12, cy + r * 1.3, cx + r * 0.95, cy + r * 1.48);
+      g.bezierCurveTo(cx + r * 0.8, cy + r * 1.25, cx + r * 0.78, cy + r * 0.7, cx + r * 1.05, cy + r * 0.25);
+      g.fill();
+      g.globalAlpha = 1;
+
+      // highlight along the tail
+      g.strokeStyle = pal.light; g.globalAlpha = 0.55; g.lineWidth = Math.max(0.8, s * 0.02);
+      g.beginPath();
+      g.moveTo(cx + r * 0.85, cy - r * 0.05);
+      g.quadraticCurveTo(cx + r * 1.22, cy + r * 0.35, cx + r * 1.08, cy + r * 1.05);
+      g.stroke();
+      g.globalAlpha = 1;
+
+      // hair tie in the shirt color so it reads on dark hair (rainbow falls back to navy)
+      g.fillStyle = (!shirt || shirt === 'rainbow') ? '#1f2937' : shirt;
+      g.beginPath(); g.ellipse(cx + r * 0.78, cy + r * 0.08, r * 0.17, r * 0.1, 0.7, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      g.beginPath(); g.ellipse(cx + r * 0.75, cy + r * 0.05, r * 0.07, r * 0.035, 0.7, 0, Math.PI * 2); g.fill();
+      return;
+    }
+
+    if (style === 'bob') {
+      // Jaw-length side lobes with a neck gap. Fill only on the join so they
+      // blend into the crown; stroke just the outer/bottom edge.
+      function bobLobe(dir) {
+        const d = dir;
+        g.beginPath();
+        g.moveTo(cx + d * r * 0.75, cy + r * 0.05);
+        g.bezierCurveTo(cx + d * r * 1.22, cy + r * 0.2, cx + d * r * 1.2, cy + r * 0.85, cx + d * r * 0.72, cy + r * 1.14);
+        g.bezierCurveTo(cx + d * r * 0.45, cy + r * 1.2, cx + d * r * 0.4, cy + r * 0.9, cx + d * r * 0.52, cy + r * 0.55);
+        g.quadraticCurveTo(cx + d * r * 0.62, cy + r * 0.25, cx + d * r * 0.7, cy + r * 0.08);
+        g.closePath(); g.fill();
+        g.beginPath();
+        g.moveTo(cx + d * r * 0.95, cy + r * 0.25);
+        g.bezierCurveTo(cx + d * r * 1.2, cy + r * 0.45, cx + d * r * 1.18, cy + r * 0.9, cx + d * r * 0.72, cy + r * 1.14);
+        g.stroke();
+      }
+      bobLobe(-1); bobLobe(1);
+      g.fillStyle = pal.dark; g.globalAlpha = 0.2;
+      g.beginPath(); g.ellipse(cx - r * 0.85, cy + r * 0.72, r * 0.2, r * 0.24, 0.2, 0, Math.PI * 2); g.fill();
+      g.beginPath(); g.ellipse(cx + r * 0.85, cy + r * 0.72, r * 0.2, r * 0.24, -0.2, 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 1;
+      return;
+    }
+
+    if (style === 'long') {
+      // Two separate cascades over the shoulders; neck and shirt stay visible.
+      // Stroke only the outer side + wavy hem so the join under the crown is seamless.
+      function longLock(dir) {
+        const d = dir;
+        g.beginPath();
+        g.moveTo(cx + d * r * 0.7, cy + r * 0.05);
+        g.bezierCurveTo(cx + d * r * 1.38, cy + r * 0.35, cx + d * r * 1.38, cy + r * 1.25, cx + d * r * 1.15, cy + r * 2.0);
+        g.quadraticCurveTo(cx + d * r * 0.85, cy + r * 2.22, cx + d * r * 0.55, cy + r * 1.95);
+        g.quadraticCurveTo(cx + d * r * 0.42, cy + r * 1.55, cx + d * r * 0.48, cy + r * 1.05);
+        g.quadraticCurveTo(cx + d * r * 0.52, cy + r * 0.5, cx + d * r * 0.62, cy + r * 0.12);
+        g.closePath(); g.fill();
+        g.beginPath();
+        g.moveTo(cx + d * r * 1.05, cy + r * 0.45);
+        g.bezierCurveTo(cx + d * r * 1.38, cy + r * 0.7, cx + d * r * 1.35, cy + r * 1.35, cx + d * r * 1.15, cy + r * 2.0);
+        g.quadraticCurveTo(cx + d * r * 0.85, cy + r * 2.22, cx + d * r * 0.55, cy + r * 1.95);
+        g.stroke();
+      }
+      longLock(-1); longLock(1);
+      g.fillStyle = pal.dark; g.globalAlpha = 0.25;
+      g.beginPath();
+      g.ellipse(cx - r * 0.95, cy + r * 1.85, r * 0.32, r * 0.16, -0.2, 0, Math.PI * 2); g.fill();
+      g.beginPath();
+      g.ellipse(cx + r * 0.95, cy + r * 1.85, r * 0.32, r * 0.16, 0.2, 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 1;
+    }
+  }
+
+  function drawHairFront(g, s, cx, cy, r, style, pal, hat) {
+    g.fillStyle = pal.base; g.strokeStyle = pal.outline; g.lineWidth = Math.max(0.65, s * 0.015);
+    const capOn = hat === 'cap';
+
+    if (style === 'short') {
+      g.beginPath();
+      g.arc(cx, cy - r * 0.08, r * 1.02, Math.PI * 1.08, Math.PI * 1.92);
+      g.quadraticCurveTo(cx, cy - r * 0.55, cx - r * 0.95, cy - r * 0.2);
+      g.fill();
+      // short sideburns
+      g.beginPath();
+      g.moveTo(cx - r * 0.95, cy + r * 0.02);
+      g.quadraticCurveTo(cx - r * 1.0, cy + r * 0.28, cx - r * 0.78, cy + r * 0.38);
+      g.quadraticCurveTo(cx - r * 0.86, cy + r * 0.12, cx - r * 0.82, cy); g.fill();
+      g.beginPath();
+      g.moveTo(cx + r * 0.95, cy + r * 0.02);
+      g.quadraticCurveTo(cx + r * 1.0, cy + r * 0.28, cx + r * 0.78, cy + r * 0.38);
+      g.quadraticCurveTo(cx + r * 0.86, cy + r * 0.12, cx + r * 0.82, cy); g.fill();
+      g.beginPath();
+      g.arc(cx, cy - r * 0.08, r * 1.02, Math.PI * 1.1, Math.PI * 1.9);
+      g.stroke();
+      drawCrownHighlight(g, cx, cy, r, pal);
+      return;
+    }
+
+    // Rounded crown + tapered face-framing locks as ONE silhouette (no stacked lids).
+    // Side part sits left of center. Cap covers the crown, so only draw side locks then.
+    if (!capOn) {
+      g.beginPath();
+      // left temple, around the top, down the right temple
+      g.moveTo(cx - r * 0.98, cy + r * 0.12);
+      g.bezierCurveTo(cx - r * 1.15, cy - r * 0.45, cx - r * 0.55, cy - r * 1.28, cx + r * 0.05, cy - r * 1.2);
+      g.bezierCurveTo(cx + r * 0.75, cy - r * 1.22, cx + r * 1.18, cy - r * 0.45, cx + r * 0.98, cy + r * 0.15);
+      // right face-frame, tapered toward the cheek
+      const rightEnd = style === 'long' ? 1.05 : (style === 'bob' ? 0.95 : 0.72);
+      g.bezierCurveTo(cx + r * 1.02, cy + r * 0.5, cx + r * 0.88, cy + r * rightEnd, cx + r * 0.55, cy + r * (rightEnd + 0.1));
+      g.quadraticCurveTo(cx + r * 0.58, cy + r * 0.35, cx + r * 0.72, cy + r * 0.05);
+      // inner hairline up to the part (the bangs will cover the forehead later)
+      g.quadraticCurveTo(cx + r * 0.35, cy - r * 0.45, cx - r * 0.22, cy - r * 0.22);
+      g.quadraticCurveTo(cx - r * 0.55, cy - r * 0.4, cx - r * 0.75, cy + r * 0.02);
+      // left face-frame
+      const leftEnd = style === 'long' ? 1.0 : (style === 'bob' ? 0.95 : 0.72);
+      g.quadraticCurveTo(cx - r * 0.55, cy + r * 0.35, cx - r * 0.52, cy + r * (leftEnd + 0.08));
+      g.bezierCurveTo(cx - r * 0.85, cy + r * leftEnd, cx - r * 1.02, cy + r * 0.45, cx - r * 0.98, cy + r * 0.12);
+      g.closePath(); g.fill();
+      // stroke only the outer skull edge, not the inner hairline
+      g.beginPath();
+      g.moveTo(cx - r * 0.98, cy + r * 0.12);
+      g.bezierCurveTo(cx - r * 1.15, cy - r * 0.45, cx - r * 0.55, cy - r * 1.28, cx + r * 0.05, cy - r * 1.2);
+      g.bezierCurveTo(cx + r * 0.75, cy - r * 1.22, cx + r * 1.18, cy - r * 0.45, cx + r * 0.98, cy + r * 0.15);
+      g.stroke();
+      // a short, soft part at the hairline only (bangs already suggest the side part)
+      g.strokeStyle = pal.dark; g.globalAlpha = 0.28; g.lineWidth = Math.max(0.5, s * 0.01);
+      g.beginPath();
+      g.moveTo(cx - r * 0.22, cy - r * 0.22);
+      g.lineTo(cx - r * 0.2, cy - r * 0.48);
+      g.stroke();
+      g.globalAlpha = 1;
+      drawCrownHighlight(g, cx, cy, r, pal);
+    } else {
+      // sides only under a cap
+      g.beginPath();
+      g.moveTo(cx - r * 0.95, cy + r * 0.1);
+      g.quadraticCurveTo(cx - r * 1.05, cy - r * 0.2, cx - r * 0.65, cy - r * 0.55);
+      g.lineTo(cx - r * 0.4, cy - r * 0.25);
+      g.quadraticCurveTo(cx - r * 0.7, cy - r * 0.05, cx - r * 0.95, cy + r * 0.1);
+      g.fill();
+      g.beginPath();
+      g.moveTo(cx + r * 0.95, cy + r * 0.12);
+      g.quadraticCurveTo(cx + r * 1.05, cy - r * 0.2, cx + r * 0.65, cy - r * 0.55);
+      g.lineTo(cx + r * 0.4, cy - r * 0.25);
+      g.quadraticCurveTo(cx + r * 0.7, cy - r * 0.05, cx + r * 0.95, cy + r * 0.12);
+      g.fill();
+      // short face frames
+      g.beginPath();
+      g.moveTo(cx - r * 0.95, cy + r * 0.12);
+      g.bezierCurveTo(cx - r * 1.05, cy + r * 0.45, cx - r * 0.85, cy + r * 0.7, cx - r * 0.55, cy + r * 0.72);
+      g.quadraticCurveTo(cx - r * 0.6, cy + r * 0.35, cx - r * 0.75, cy + r * 0.1);
+      g.fill();
+      g.beginPath();
+      g.moveTo(cx + r * 0.95, cy + r * 0.12);
+      g.bezierCurveTo(cx + r * 1.05, cy + r * 0.45, cx + r * 0.85, cy + r * 0.7, cx + r * 0.55, cy + r * 0.72);
+      g.quadraticCurveTo(cx + r * 0.6, cy + r * 0.35, cx + r * 0.75, cy + r * 0.1);
+      g.fill();
+    }
+  }
+
+  function drawBangs(g, s, cx, cy, r, pal, hat) {
+    g.fillStyle = pal.base;
+    if (hat === 'cap') {
+      // Thin fringe peeking under the brim — stays clearly above the eyes
+      g.beginPath();
+      g.moveTo(cx - r * 0.4, cy - r * 0.32);
+      g.bezierCurveTo(cx - r * 0.05, cy - r * 0.48, cx + r * 0.4, cy - r * 0.5, cx + r * 0.72, cy - r * 0.32);
+      g.quadraticCurveTo(cx + r * 0.5, cy - r * 0.2, cx + r * 0.1, cy - r * 0.22);
+      g.quadraticCurveTo(cx - r * 0.18, cy - r * 0.2, cx - r * 0.4, cy - r * 0.32);
+      g.closePath(); g.fill();
+      g.strokeStyle = pal.light; g.globalAlpha = 0.45; g.lineWidth = Math.max(0.6, s * 0.014);
+      g.beginPath();
+      g.moveTo(cx - r * 0.05, cy - r * 0.38);
+      g.quadraticCurveTo(cx + r * 0.3, cy - r * 0.4, cx + r * 0.55, cy - r * 0.3);
+      g.stroke();
+      g.globalAlpha = 1;
+      return;
+    }
+    // Side-parted, swept-right bangs. Filled only — no outline against the face.
+    // Lower edge stays above the eyes so they never look covered.
+    g.beginPath();
+    g.moveTo(cx - r * 0.28, cy - r * 0.22);
+    g.bezierCurveTo(cx - r * 0.05, cy - r * 0.68, cx + r * 0.48, cy - r * 0.7, cx + r * 0.88, cy - r * 0.2);
+    g.quadraticCurveTo(cx + r * 0.7, cy - r * 0.08, cx + r * 0.4, cy - r * 0.14);
+    g.quadraticCurveTo(cx + r * 0.08, cy - r * 0.24, cx - r * 0.12, cy - r * 0.14);
+    g.quadraticCurveTo(cx - r * 0.24, cy - r * 0.16, cx - r * 0.28, cy - r * 0.22);
+    g.closePath(); g.fill();
+
+    g.fillStyle = pal.dark; g.globalAlpha = 0.2;
+    g.beginPath();
+    g.moveTo(cx - r * 0.28, cy - r * 0.22);
+    g.quadraticCurveTo(cx - r * 0.05, cy - r * 0.52, cx + r * 0.22, cy - r * 0.5);
+    g.quadraticCurveTo(cx + r * 0.05, cy - r * 0.3, cx - r * 0.22, cy - r * 0.18);
+    g.fill();
+    g.globalAlpha = 1;
+
+    g.strokeStyle = pal.light; g.globalAlpha = 0.5; g.lineWidth = Math.max(0.7, s * 0.016);
+    g.beginPath();
+    g.moveTo(cx + r * 0.08, cy - r * 0.48);
+    g.quadraticCurveTo(cx + r * 0.4, cy - r * 0.5, cx + r * 0.68, cy - r * 0.3);
+    g.stroke();
+    g.globalAlpha = 1;
+  }
+
+  function drawCrownHighlight(g, cx, cy, r, pal) {
+    g.strokeStyle = pal.light; g.globalAlpha = 0.55; g.lineWidth = Math.max(0.8, r * 0.11);
+    g.beginPath();
+    g.moveTo(cx - r * 0.2, cy - r * 0.95);
+    g.quadraticCurveTo(cx + r * 0.15, cy - r * 1.15, cx + r * 0.5, cy - r * 0.9);
+    g.stroke();
+    g.globalAlpha = 1;
+  }
+
+  function drawVisor(g, s, cx, cy, r) {
+    g.fillStyle = '#fff';
+    g.beginPath(); g.ellipse(cx + r * 0.35, cy - r * 0.32, r * 0.95, r * 0.12, 0.08, 0, Math.PI * 2); g.fill();
+  }
+  function drawHat(g, s, cx, cy, r, look, opts) {
+    opts = opts || {};
+    const hat = look.hat, shirt = look.shirt === 'rainbow' ? '#3b82f6' : look.shirt;
+    if (hat === 'cap') {
+      g.fillStyle = shirt;
+      g.beginPath();
+      g.moveTo(cx - r * 1.05, cy - r * 0.5);
+      g.bezierCurveTo(cx - r * 1.0, cy - r * 1.22, cx + r * 0.2, cy - r * 1.42, cx + r * 0.95, cy - r * 0.72);
+      g.quadraticCurveTo(cx + r * 1.0, cy - r * 0.42, cx + r * 0.7, cy - r * 0.4);
+      g.quadraticCurveTo(cx, cy - r * 0.52, cx - r * 1.05, cy - r * 0.5);
+      g.closePath(); g.fill();
+      g.fillStyle = 'rgba(0,0,0,0.12)';
+      g.beginPath();
+      g.ellipse(cx - r * 0.08, cy - r * 0.85, r * 0.55, r * 0.16, -0.15, 0, Math.PI * 2); g.fill();
+      g.fillStyle = shirt;
+      g.beginPath(); g.ellipse(cx + r * 0.52, cy - r * 0.4, r * 0.85, r * 0.15, 0.06, 0, Math.PI * 2); g.fill();
+      g.fillStyle = 'rgba(0,0,0,0.15)';
+      g.beginPath(); g.ellipse(cx + r * 0.52, cy - r * 0.36, r * 0.7, r * 0.07, 0.06, 0, Math.PI); g.fill();
+    }
+    if (hat === 'headband' || hat === 'bandana') {
+      g.fillStyle = hat === 'bandana' ? '#e76f51' : '#fff';
+      g.beginPath();
+      g.moveTo(cx - r * 0.98, cy - r * 0.28);
+      g.quadraticCurveTo(cx, cy - r * 0.48, cx + r * 0.98, cy - r * 0.28);
+      g.lineTo(cx + r * 0.95, cy - r * 0.08);
+      g.quadraticCurveTo(cx, cy - r * 0.28, cx - r * 0.95, cy - r * 0.08);
+      g.closePath(); g.fill();
+      if (hat === 'bandana') {
+        g.fillStyle = '#d35400';
+        g.beginPath();
+        g.moveTo(cx + r * 0.9, cy - r * 0.2);
+        g.lineTo(cx + r * 1.25, cy + r * 0.15);
+        g.lineTo(cx + r * 0.95, cy - r * 0.02);
+        g.closePath(); g.fill();
+      }
+    }
+    if (hat === 'visor' && !opts.skipVisor) drawVisor(g, s, cx, cy, r);
+  }
+
   function lookFor(name) { return C.lookFromName(name); }
   function playerLook() { const l = Object.assign({}, C.normalizeLook(P && P.look, P && P.name)); const o = P && C.cosById(P.cos.outfit); if (o && o.color) l.shirt = o.color; return l; }
   function lookOfOpp(ob) {
@@ -2459,13 +2814,19 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     const pro = ob.pro && D.PROS.find(p => p.id === ob.pro); if (pro && pro.look) return C.normalizeLook(pro.look, ob.name);
     return lookFor(ob.name || 'rival');
   }
+  function styleForGender(style, gender) {
+    if (gender === 'female' && style === 'short') return 'ponytail';
+    if (gender === 'male' && style === 'ponytail') return 'short';
+    return style || (gender === 'female' ? 'ponytail' : 'short');
+  }
   function lookEditorHtml() {
     const A = D.APPEARANCE, sw = (key, arr) => `<div class="swatches" data-sw="${key}">` + arr.map(c => `<button type="button" class="chip" data-${key}="${c}" style="background:${c}" aria-label="${key} ${c}"></button>`).join('') + '</div>';
     const hats = { none: 'None', cap: 'Cap', headband: 'Headband' };
     return `<div class="lookprev" id="lookPrev"></div>
       <div class="genders"><button type="button" class="btn gender" id="genderMale" data-g="male"><span class="gav" id="gavM"></span>Male</button><button type="button" class="btn gender pink" id="genderFemale" data-g="female"><span class="gav" id="gavF"></span>Female</button></div>
       <p class="muted" style="margin:6px 0 2px">Skin</p>${sw('skin', A.skins)}
-      <p class="muted" style="margin:6px 0 2px">Hair</p>${sw('hair', A.hairs)}
+      <p class="muted" style="margin:6px 0 2px">Hair color</p>${sw('hair', A.hairs)}
+      <p class="muted" style="margin:6px 0 2px">Hairstyle</p><div class="hatrow stylerow">${(A.hairStyles || ['short', 'ponytail', 'bob', 'long']).map(h => `<button type="button" class="btn small gray" data-style="${h}">${(A.hairStyleLabels && A.hairStyleLabels[h]) || h}</button>`).join('')}</div>
       <p class="muted" style="margin:6px 0 2px">Shirt</p>${sw('shirt', A.shirts)}
       <p class="muted" style="margin:6px 0 2px">Hat</p><div class="hatrow">${A.hatChoices.map(h => `<button type="button" class="btn small gray" data-hat="${h}">${hats[h] || h}</button>`).join('')}</div>
       <p class="muted" style="margin-top:8px">Looks only — this never changes your stats, and you can change it anytime for free.</p>`;
@@ -2475,16 +2836,18 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
     const paint = () => {
       const prev = root.querySelector('#lookPrev'); if (prev) { prev.innerHTML = ''; prev.appendChild(avatar(state, opt.previewSize || 88)); }
       const gm = root.querySelector('#gavM'), gf = root.querySelector('#gavF');
-      if (gm) { gm.innerHTML = ''; gm.appendChild(avatar(Object.assign({}, state, { gender: 'male', hat: 'none' }), 36)); }
-      if (gf) { gf.innerHTML = ''; gf.appendChild(avatar(Object.assign({}, state, { gender: 'female', hat: 'none' }), 36)); }
+      if (gm) { gm.innerHTML = ''; gm.appendChild(avatar(Object.assign({}, state, { gender: 'male', hat: 'none', hairStyle: styleForGender(state.hairStyle, 'male') }), 36)); }
+      if (gf) { gf.innerHTML = ''; gf.appendChild(avatar(Object.assign({}, state, { gender: 'female', hat: 'none', hairStyle: styleForGender(state.hairStyle, 'female') }), 36)); }
       root.querySelectorAll('[data-g]').forEach(b => b.classList.toggle('sel', (!opt.requirePick || opt._picked) && b.dataset.g === state.gender));
       ['skin', 'hair', 'shirt'].forEach(k => root.querySelectorAll('[data-' + k + ']').forEach(b => b.classList.toggle('sel', b.getAttribute('data-' + k) === state[k])));
       root.querySelectorAll('[data-hat]').forEach(b => { b.classList.toggle('sel', b.dataset.hat === state.hat); b.classList.toggle('green', b.dataset.hat === state.hat); b.classList.toggle('gray', b.dataset.hat !== state.hat); });
+      root.querySelectorAll('[data-style]').forEach(b => { b.classList.toggle('sel', b.dataset.style === state.hairStyle); b.classList.toggle('green', b.dataset.style === state.hairStyle); b.classList.toggle('gray', b.dataset.style !== state.hairStyle); });
       if (opt.onChange) opt.onChange(state);
     };
-    root.querySelectorAll('[data-g]').forEach(b => (b.onclick = () => { state.gender = b.dataset.g; opt._picked = true; if (opt.onPickGender) opt.onPickGender(state.gender); paint(); }));
+    root.querySelectorAll('[data-g]').forEach(b => (b.onclick = () => { state.hairStyle = styleForGender(state.hairStyle, b.dataset.g); state.gender = b.dataset.g; opt._picked = true; if (opt.onPickGender) opt.onPickGender(state.gender); paint(); }));
     ['skin', 'hair', 'shirt'].forEach(k => root.querySelectorAll('[data-' + k + ']').forEach(b => (b.onclick = () => { state[k] = b.getAttribute('data-' + k); paint(); })));
     root.querySelectorAll('[data-hat]').forEach(b => (b.onclick = () => { state.hat = b.dataset.hat; paint(); }));
+    root.querySelectorAll('[data-style]').forEach(b => (b.onclick = () => { state.hairStyle = b.dataset.style; paint(); }));
     paint();
     return { state, paint };
   }
@@ -2564,7 +2927,7 @@ table.lb.rw{font-size:12px}table.lb.rw td,table.lb.rw th{padding:4px 3px}
 
   // ---------- Create / Hub ----------
   RENDER.create = () => {
-    const draft = C.normalizeLook(lookFor('New Bowler'), 'New Bowler'); let pickedGender = false;
+    const draft = C.normalizeLook(Object.assign(lookFor('New Bowler'), { hat: 'none' }), 'New Bowler'); let pickedGender = false;
     $('#create').innerHTML = `<h1>🎳 Pin Masters<br><span style="font-size:22px">RPG</span></h1>
       <div class="card"><h2>Create your bowler</h2><input id="nameIn" type="text" maxlength="16" placeholder="Your bowler name" value="">
       <p class="muted">Use a nickname, not your real name. Everything saves on this device.</p>
